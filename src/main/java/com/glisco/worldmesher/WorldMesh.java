@@ -3,6 +3,7 @@ package com.glisco.worldmesher;
 import com.glisco.worldmesher.renderers.WorldMesherBlockModelRenderer;
 import com.glisco.worldmesher.renderers.WorldMesherFluidRenderer;
 import com.google.common.collect.Lists;
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.VertexBuffer;
@@ -17,10 +18,7 @@ import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Matrix4f;
 import net.minecraft.world.World;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -31,10 +29,12 @@ public class WorldMesh {
     private final World world;
     private final BlockPos origin;
     private final BlockPos end;
+    private final boolean cull;
     private final boolean bakeBlockEntities;
     private final boolean bakeEntities;
 
     private MeshState state = MeshState.NEW;
+    private float buildProgress = 0;
 
     private final Map<RenderLayer, VertexBuffer> bufferStorage;
     private final Map<RenderLayer, BufferBuilder> initializedLayers;
@@ -44,17 +44,19 @@ public class WorldMesh {
 
     private Supplier<MatrixStack> matrixStackSupplier = MatrixStack::new;
 
-    private WorldMesh(World world, BlockPos origin, BlockPos end, boolean bakeBlockEntities, boolean bakeEntities, Runnable renderStartAction, Runnable renderEndAction) {
+    private WorldMesh(World world, BlockPos origin, BlockPos end, boolean bakeBlockEntities, boolean bakeEntities, boolean cull, Runnable renderStartAction, Runnable renderEndAction) {
         this.world = world;
         this.origin = origin;
         this.end = end;
         this.bakeBlockEntities = bakeBlockEntities;
         this.bakeEntities = bakeEntities;
 
+        this.cull = cull;
+
         this.renderStartAction = renderStartAction;
         this.renderEndAction = renderEndAction;
 
-        this.bufferStorage = RenderLayer.getBlockLayers().stream().collect(Collectors.toMap((renderLayer) -> renderLayer, (renderLayer) -> new VertexBuffer(VertexFormats.POSITION_COLOR_TEXTURE_LIGHT_NORMAL)));
+        this.bufferStorage = RenderLayer.getBlockLayers().stream().collect(Collectors.toMap((renderLayer) -> renderLayer, (renderLayer) -> new VertexBuffer()));
         this.initializedLayers = new HashMap<>();
 
         this.scheduleRebuild();
@@ -104,6 +106,15 @@ public class WorldMesh {
     }
 
     /**
+     * How much of this mesh is built
+     *
+     * @return The build progress of this mesh
+     */
+    public float getBuildProgress() {
+        return buildProgress;
+    }
+
+    /**
      * Schedules a rebuild a of this mesh
      */
     public void scheduleRebuild() {
@@ -122,14 +133,43 @@ public class WorldMesh {
 
         Random random = new Random();
 
+        List<BlockPos> possess = new ArrayList<>();
         for (BlockPos pos : BlockPos.iterate(this.origin, this.end)) {
+            possess.add(pos.toImmutable());
+        }
+
+        int blocksToBuild = possess.size();
+
+        for (int i = 0; i < blocksToBuild; i++) {
+            BlockPos pos = possess.get(i);
+            BlockPos renderPos = pos.subtract(origin);
 
             //TODO check if loaded
             BlockState state = world.getBlockState(pos);
             if (state.isAir()) continue;
 
+            if (!world.getFluidState(pos).isEmpty()) {
+
+                FluidState fluidState = world.getFluidState(pos);
+                RenderLayer fluidLayer = RenderLayers.getFluidLayer(fluidState);
+
+                if (!initializedLayers.containsKey(fluidLayer)) {
+                    BufferBuilder builder = new BufferBuilder(fluidLayer.getExpectedBufferSize());
+                    initializedLayers.put(fluidLayer, builder);
+                    builder.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR_TEXTURE_LIGHT_NORMAL);
+                }
+
+                matrices.push();
+                matrices.translate(-(pos.getX() & 15), -(pos.getY() & 15), -(pos.getZ() & 15));
+                matrices.translate(renderPos.getX(), renderPos.getY(), renderPos.getZ());
+
+                fluidRenderer.setMatrix(matrices.peek().getModel());
+                fluidRenderer.render(world, pos, initializedLayers.get(fluidLayer), fluidState);
+
+                matrices.pop();
+            }
+
             matrices.push();
-            BlockPos renderPos = pos.subtract(origin);
             matrices.translate(renderPos.getX(), renderPos.getY(), renderPos.getZ());
 
             blockRenderer.clearCullingOverrides();
@@ -145,42 +185,22 @@ public class WorldMesh {
             if (!initializedLayers.containsKey(renderLayer)) {
                 BufferBuilder builder = new BufferBuilder(renderLayer.getExpectedBufferSize());
                 initializedLayers.put(renderLayer, builder);
-                builder.begin(7, VertexFormats.POSITION_COLOR_TEXTURE_LIGHT_NORMAL);
+                builder.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR_TEXTURE_LIGHT_NORMAL);
             }
 
-            blockRenderer.render(world, blockRenderManager.getModel(state), state, pos, matrices, initializedLayers.get(renderLayer), true, random, state.getRenderingSeed(pos), OverlayTexture.DEFAULT_UV);
+            blockRenderer.render(world, blockRenderManager.getModel(state), state, pos, matrices, initializedLayers.get(renderLayer), cull, random, state.getRenderingSeed(pos), OverlayTexture.DEFAULT_UV);
             matrices.pop();
 
-            if (!world.getFluidState(pos).isEmpty()) {
-
-                FluidState fluidState = world.getFluidState(pos);
-                RenderLayer fluidLayer = RenderLayers.getFluidLayer(fluidState);
-
-                if (!initializedLayers.containsKey(fluidLayer)) {
-                    BufferBuilder builder = new BufferBuilder(fluidLayer.getExpectedBufferSize());
-                    initializedLayers.put(fluidLayer, builder);
-                    builder.begin(7, VertexFormats.POSITION_COLOR_TEXTURE_LIGHT_NORMAL);
-                }
-
-                matrices.push();
-                matrices.translate(-(pos.getX() & 15), -(pos.getY() & 15), -(pos.getZ() & 15));
-                matrices.translate(renderPos.getX(), renderPos.getY(), renderPos.getZ());
-
-                fluidRenderer.setMatrix(matrices.peek().getModel());
-                fluidRenderer.render(world, pos, initializedLayers.get(fluidLayer), fluidState);
-
-                matrices.pop();
-            }
-
+            this.buildProgress = i / (float) blocksToBuild;
         }
 
         if (initializedLayers.containsKey(RenderLayer.getTranslucent())) {
             BufferBuilder bufferBuilder3 = initializedLayers.get(RenderLayer.getTranslucent());
             Camera camera = MinecraftClient.getInstance().gameRenderer.getCamera();
-            bufferBuilder3.sortQuads((float) camera.getPos().x - (float) origin.getX(), (float) camera.getPos().y - (float) origin.getY(), (float) camera.getPos().z - (float) origin.getZ());
+            bufferBuilder3.setCameraPosition((float) camera.getPos().x - (float) origin.getX(), (float) camera.getPos().y - (float) origin.getY(), (float) camera.getPos().z - (float) origin.getZ());
         }
 
-        initializedLayers.entrySet().stream().map(Map.Entry::getValue).forEach(BufferBuilder::end);
+        initializedLayers.values().forEach(BufferBuilder::end);
 
         List<CompletableFuture<Void>> list = Lists.newArrayList();
         initializedLayers.forEach((renderLayer, bufferBuilder) -> {
@@ -188,7 +208,8 @@ public class WorldMesh {
         });
         Util.combine(list).handle((voids, throwable) -> {
             if (throwable != null) {
-                MinecraftClient.getInstance().setCrashReport(CrashReport.create(throwable, "Building WorldMesher mesh"));
+                CrashReport crashReport = CrashReport.create(throwable, "Building WorldMesher Mesh");
+                MinecraftClient.getInstance().setCrashReport(MinecraftClient.getInstance().addDetailsToCrashReport(crashReport));
             }
             return true;
         });
@@ -196,19 +217,17 @@ public class WorldMesh {
     }
 
     private void draw(RenderLayer renderLayer, VertexBuffer vertexBuffer, Matrix4f matrix) {
-        vertexBuffer.bind();
-        renderLayer.getVertexFormat().startDrawing(0);
+        RenderSystem.setShader(GameRenderer::getPositionTexColorNormalShader);
+
         renderLayer.startDrawing();
 
         renderStartAction.run();
 
-        vertexBuffer.draw(matrix, 7);
+        vertexBuffer.setShader(matrix, RenderSystem.getProjectionMatrix(), RenderSystem.getShader());
 
         renderEndAction.run();
 
         renderLayer.endDrawing();
-        renderLayer.getVertexFormat().endDrawing();
-        VertexBuffer.unbind();
     }
 
     public static class Builder {
@@ -218,10 +237,10 @@ public class WorldMesh {
         private final BlockPos origin;
         private final BlockPos end;
         private boolean bakeBlockEntities = false;
-
         private boolean bakeEntities = false;
-        private Runnable startAction = () -> {};
+        private boolean cull = true;
 
+        private Runnable startAction = () -> {};
         private Runnable endAction = () -> {};
 
         public Builder(World world, BlockPos origin, BlockPos end) {
@@ -240,6 +259,11 @@ public class WorldMesh {
             return this;
         }
 
+        public Builder disableCulling() {
+            this.cull = false;
+            return this;
+        }
+
         public Builder renderActions(Runnable startAction, Runnable endAction) {
             this.startAction = startAction;
             this.endAction = endAction;
@@ -251,7 +275,7 @@ public class WorldMesh {
             BlockPos start = new BlockPos(Math.min(origin.getX(), end.getX()), Math.min(origin.getY(), end.getY()), Math.min(origin.getZ(), end.getZ()));
             BlockPos target = new BlockPos(Math.max(origin.getX(), end.getX()), Math.max(origin.getY(), end.getY()), Math.max(origin.getZ(), end.getZ()));
 
-            return new WorldMesh(world, start, target, bakeBlockEntities, bakeEntities, startAction, endAction);
+            return new WorldMesh(world, start, target, bakeBlockEntities, bakeEntities, cull, startAction, endAction);
         }
     }
 
@@ -271,17 +295,3 @@ public class WorldMesh {
     }
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-

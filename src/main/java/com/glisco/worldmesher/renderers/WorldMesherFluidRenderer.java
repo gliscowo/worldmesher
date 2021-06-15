@@ -2,11 +2,15 @@ package com.glisco.worldmesher.renderers;
 
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.block.FluidRenderer;
-import net.minecraft.util.math.Matrix4f;
+import net.minecraft.util.math.*;
 
 public class WorldMesherFluidRenderer extends FluidRenderer {
 
     private Matrix4f matrix;
+
+    public WorldMesherFluidRenderer(){
+        onResourceReload();
+    }
 
     public void setMatrix(Matrix4f matrix) {
         this.matrix = matrix;
