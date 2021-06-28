@@ -8,6 +8,10 @@ public class WorldMesherFluidRenderer extends FluidRenderer {
 
     private Matrix4f matrix;
 
+    public WorldMesherFluidRenderer() {
+        onResourceReload();
+    }
+
     public void setMatrix(Matrix4f matrix) {
         this.matrix = matrix;
     }
