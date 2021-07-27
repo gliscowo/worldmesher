@@ -25,13 +25,10 @@ import java.util.stream.Collectors;
 
 public class WorldMesh {
 
-    //TODO entities and blockentities
     private final World world;
     private final BlockPos origin;
     private final BlockPos end;
     private final boolean cull;
-    private final boolean bakeBlockEntities;
-    private final boolean bakeEntities;
 
     private MeshState state = MeshState.NEW;
     private float buildProgress = 0;
@@ -39,17 +36,17 @@ public class WorldMesh {
     private final Map<RenderLayer, VertexBuffer> bufferStorage;
     private final Map<RenderLayer, BufferBuilder> initializedLayers;
 
+    private DynamicRenderInfo renderInfo;
+
     private final Runnable renderStartAction;
     private final Runnable renderEndAction;
 
     private Supplier<MatrixStack> matrixStackSupplier = MatrixStack::new;
 
-    private WorldMesh(World world, BlockPos origin, BlockPos end, boolean bakeBlockEntities, boolean bakeEntities, boolean cull, Runnable renderStartAction, Runnable renderEndAction) {
+    private WorldMesh(World world, BlockPos origin, BlockPos end, boolean cull, Runnable renderStartAction, Runnable renderEndAction) {
         this.world = world;
         this.origin = origin;
         this.end = end;
-        this.bakeBlockEntities = bakeBlockEntities;
-        this.bakeEntities = bakeEntities;
 
         this.cull = cull;
 
@@ -58,6 +55,7 @@ public class WorldMesh {
 
         this.bufferStorage = RenderLayer.getBlockLayers().stream().collect(Collectors.toMap((renderLayer) -> renderLayer, (renderLayer) -> new VertexBuffer()));
         this.initializedLayers = new HashMap<>();
+        this.renderInfo = new DynamicRenderInfo();
 
         this.scheduleRebuild();
     }
@@ -65,9 +63,11 @@ public class WorldMesh {
     /**
      * Renders this world mesh into the current framebuffer, translated using the given matrix
      *
-     * @param matrix The translation matrix. This is applied to the entire mesh
+     * @param matrices The translation matrices. This is applied to the entire mesh
      */
-    public void render(Matrix4f matrix) {
+    public void render(MatrixStack matrices) {
+
+        final var matrix = matrices.peek().getModel();
 
         if (!this.canRender()) {
             throw new IllegalStateException("World mesh not prepared!");
@@ -114,6 +114,10 @@ public class WorldMesh {
         return buildProgress;
     }
 
+    public DynamicRenderInfo getRenderInfo() {
+        return renderInfo;
+    }
+
     /**
      * Schedules a rebuild a of this mesh
      */
@@ -139,6 +143,7 @@ public class WorldMesh {
         }
 
         int blocksToBuild = possess.size();
+        final DynamicRenderInfo.Mutable tempRenderInfo = new DynamicRenderInfo.Mutable();
 
         for (int i = 0; i < blocksToBuild; i++) {
             BlockPos pos = possess.get(i);
@@ -147,6 +152,8 @@ public class WorldMesh {
             //TODO check if loaded
             BlockState state = world.getBlockState(pos);
             if (state.isAir()) continue;
+
+            if (world.getBlockEntity(pos) != null) tempRenderInfo.addBlockEntity(renderPos, world.getBlockEntity(pos));
 
             if (!world.getFluidState(pos).isEmpty()) {
 
@@ -213,20 +220,18 @@ public class WorldMesh {
             }
             return true;
         });
-
+        this.renderInfo = tempRenderInfo.toImmutable();
     }
 
     private void draw(RenderLayer renderLayer, VertexBuffer vertexBuffer, Matrix4f matrix) {
         RenderSystem.setShader(GameRenderer::getPositionTexColorNormalShader);
 
         renderLayer.startDrawing();
-
         renderStartAction.run();
 
         vertexBuffer.setShader(matrix, RenderSystem.getProjectionMatrix(), RenderSystem.getShader());
 
         renderEndAction.run();
-
         renderLayer.endDrawing();
     }
 
@@ -236,8 +241,6 @@ public class WorldMesh {
 
         private final BlockPos origin;
         private final BlockPos end;
-        private boolean bakeBlockEntities = false;
-        private boolean bakeEntities = false;
         private boolean cull = true;
 
         private Runnable startAction = () -> {};
@@ -247,16 +250,6 @@ public class WorldMesh {
             this.world = world;
             this.origin = origin;
             this.end = end;
-        }
-
-        public Builder bakeBlockEntities() {
-            this.bakeBlockEntities = true;
-            return this;
-        }
-
-        public Builder bakeEntities() {
-            this.bakeEntities = true;
-            return this;
         }
 
         public Builder disableCulling() {
@@ -275,7 +268,7 @@ public class WorldMesh {
             BlockPos start = new BlockPos(Math.min(origin.getX(), end.getX()), Math.min(origin.getY(), end.getY()), Math.min(origin.getZ(), end.getZ()));
             BlockPos target = new BlockPos(Math.max(origin.getX(), end.getX()), Math.max(origin.getY(), end.getY()), Math.max(origin.getZ(), end.getZ()));
 
-            return new WorldMesh(world, start, target, bakeBlockEntities, bakeEntities, cull, startAction, endAction);
+            return new WorldMesh(world, start, target, cull, startAction, endAction);
         }
     }
 

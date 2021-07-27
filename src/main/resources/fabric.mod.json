@@ -10,6 +10,7 @@
   "contact": {},
   "license": "MIT",
   "environment": "*",
+  "icon": "assets/worldmesher/icon.png",
   "accessWidener": "worldmesher.accesswidener",
   "mixins": [
     "worldmesher.mixins.json"
