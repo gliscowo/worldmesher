@@ -67,7 +67,7 @@ public class WorldMesh {
      */
     public void render(MatrixStack matrices) {
 
-        final var matrix = matrices.peek().getModel();
+        final var matrix = matrices.peek().getPositionMatrix();
 
         if (!this.canRender()) {
             throw new IllegalStateException("World mesh not prepared!");
@@ -170,7 +170,7 @@ public class WorldMesh {
                 matrices.translate(-(pos.getX() & 15), -(pos.getY() & 15), -(pos.getZ() & 15));
                 matrices.translate(renderPos.getX(), renderPos.getY(), renderPos.getZ());
 
-                fluidRenderer.setMatrix(matrices.peek().getModel());
+                fluidRenderer.setMatrix(matrices.peek().getPositionMatrix());
                 fluidRenderer.render(world, pos, initializedLayers.get(fluidLayer), fluidState);
 
                 matrices.pop();
