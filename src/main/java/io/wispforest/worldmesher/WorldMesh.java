@@ -1,7 +1,7 @@
-package com.glisco.worldmesher;
+package io.wispforest.worldmesher;
 
-import com.glisco.worldmesher.renderers.WorldMesherBlockModelRenderer;
-import com.glisco.worldmesher.renderers.WorldMesherFluidRenderer;
+import io.wispforest.worldmesher.renderers.WorldMesherBlockModelRenderer;
+import io.wispforest.worldmesher.renderers.WorldMesherFluidRenderer;
 import com.google.common.collect.Lists;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.block.BlockState;

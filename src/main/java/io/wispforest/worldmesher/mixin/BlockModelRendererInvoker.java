@@ -1,4 +1,4 @@
-package com.glisco.worldmesher.mixin;
+package io.wispforest.worldmesher.mixin;
 
 import net.minecraft.block.BlockState;
 import net.minecraft.client.render.VertexConsumer;

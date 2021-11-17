@@ -1,6 +1,6 @@
-package com.glisco.worldmesher.renderers;
+package io.wispforest.worldmesher.renderers;
 
-import com.glisco.worldmesher.mixin.BlockModelRendererInvoker;
+import io.wispforest.worldmesher.mixin.BlockModelRendererInvoker;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;

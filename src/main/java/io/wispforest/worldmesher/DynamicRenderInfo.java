@@ -1,4 +1,4 @@
-package com.glisco.worldmesher;
+package io.wispforest.worldmesher;
 
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.entity.Entity;

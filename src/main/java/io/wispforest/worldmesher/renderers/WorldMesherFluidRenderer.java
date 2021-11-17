@@ -1,4 +1,4 @@
-package com.glisco.worldmesher.renderers;
+package io.wispforest.worldmesher.renderers;
 
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.block.FluidRenderer;

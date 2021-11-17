@@ -7,8 +7,10 @@ sourceCompatibility = JavaVersion.VERSION_16
 targetCompatibility = JavaVersion.VERSION_16
 
 archivesBaseName = project.archives_base_name
-version = project.mod_version + "-" + project.minecraft_version
+version = "${project.mod_version}+${project.minecraft_base_version}"
 group = project.maven_group
+
+def ENV = System.getenv()
 
 dependencies {
     //to change the versions see the gradle.properties file
@@ -23,8 +25,8 @@ dependencies {
     // You may need to force-disable transitiveness on them.
 }
 
-minecraft {
-    accessWidener = file("src/main/resources/worldmesher.accesswidener")
+loom {
+    setAccessWidenerPath(file("src/main/resources/worldmesher.accesswidener"))
 }
 
 processResources {
@@ -79,5 +81,12 @@ publishing {
     repositories {
         // uncomment to publish to the local maven
         // mavenLocal()
+        maven {
+            url ENV.MAVEN_URL
+            credentials {
+                username ENV.MAVEN_USER
+                password ENV.MAVEN_PASSWORD
+            }
+        }
     }
 }

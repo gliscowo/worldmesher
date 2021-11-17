@@ -1,10 +1,10 @@
 {
   "required": true,
   "minVersion": "0.8",
-  "package": "com.glisco.worldmesher.mixin",
+  "package": "io.wispforest.worldmesher.mixin",
   "compatibilityLevel": "JAVA_8",
   "mixins": [
-    "BlockModelRendererInvoker"
+    "io.wispforest.worldmesher.mixin.BlockModelRendererInvoker"
   ],
   "client": [
   ],
