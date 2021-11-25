@@ -216,7 +216,7 @@ public class WorldMesh {
         Util.combine(list).handle((voids, throwable) -> {
             if (throwable != null) {
                 CrashReport crashReport = CrashReport.create(throwable, "Building WorldMesher Mesh");
-                MinecraftClient.getInstance().setCrashReport(MinecraftClient.getInstance().addDetailsToCrashReport(crashReport));
+                MinecraftClient.getInstance().setCrashReportSupplier(() -> MinecraftClient.getInstance().addDetailsToCrashReport(crashReport));
             }
             return true;
         });
