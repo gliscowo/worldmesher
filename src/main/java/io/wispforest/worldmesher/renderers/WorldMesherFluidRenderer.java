@@ -2,7 +2,7 @@ package io.wispforest.worldmesher.renderers;
 
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.block.FluidRenderer;
-import net.minecraft.util.math.*;
+import net.minecraft.util.math.Matrix4f;
 
 public class WorldMesherFluidRenderer extends FluidRenderer {
 

@@ -3,10 +3,10 @@
   "minVersion": "0.8",
   "package": "io.wispforest.worldmesher.mixin",
   "compatibilityLevel": "JAVA_16",
-  "mixins": [
-    "BlockModelRendererInvoker"
-  ],
   "client": [
+    "BlockModelRendererInvoker",
+    "FluidRendererMixin",
+    "MixinFluidRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1
