@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * This mixin is injected before Fabric API to prevent if from caching
+ * This mixin is injected before Fabric API to prevent it from caching
  * the WorldMesherFluidRenderer as the default instance
  */
 @Mixin(value = FluidRenderer.class, priority = 900)
