@@ -171,7 +171,7 @@ public class WorldMesh {
                 matrices.translate(renderPos.getX(), renderPos.getY(), renderPos.getZ());
 
                 fluidRenderer.setMatrix(matrices.peek().getPositionMatrix());
-                fluidRenderer.render(world, pos, initializedLayers.get(fluidLayer), fluidState);
+                fluidRenderer.render(world, pos, initializedLayers.get(fluidLayer), state, fluidState);
 
                 matrices.pop();
             }
@@ -204,7 +204,7 @@ public class WorldMesh {
         if (initializedLayers.containsKey(RenderLayer.getTranslucent())) {
             BufferBuilder bufferBuilder3 = initializedLayers.get(RenderLayer.getTranslucent());
             Camera camera = MinecraftClient.getInstance().gameRenderer.getCamera();
-            bufferBuilder3.setCameraPosition((float) camera.getPos().x - (float) origin.getX(), (float) camera.getPos().y - (float) origin.getY(), (float) camera.getPos().z - (float) origin.getZ());
+            bufferBuilder3.sortFrom((float) camera.getPos().x - (float) origin.getX(), (float) camera.getPos().y - (float) origin.getY(), (float) camera.getPos().z - (float) origin.getZ());
         }
 
         initializedLayers.values().forEach(BufferBuilder::end);

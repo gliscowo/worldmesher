@@ -1,6 +1,7 @@
 package io.wispforest.worldmesher.mixin;
 
 import io.wispforest.worldmesher.renderers.WorldMesherFluidRenderer;
+import net.minecraft.block.BlockState;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.block.FluidRenderer;
 import net.minecraft.fluid.FluidState;
@@ -21,12 +22,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(value = FluidRenderer.class, priority = 1100)
 public class MixinFluidRendererMixin {
 
-    @Shadow
+    @Shadow(remap = false)
     @Final
     private ThreadLocal<Boolean> fabric_customRendering;
 
-    @Inject(method = "tessellateViaHandler", at = @At("HEAD"), cancellable = true)
-    private void cancelFabricOnTwitter(BlockRenderView view, BlockPos pos, VertexConsumer vertexConsumer, FluidState state, CallbackInfoReturnable<Boolean> delegateInfo, CallbackInfo info) {
+    @Inject(method = "tessellateViaHandler", at = @At("HEAD"), cancellable = true, remap = false)
+    private void cancelFabricOnTwitter(BlockRenderView view, BlockPos pos, VertexConsumer vertexConsumer, BlockState blockState, FluidState fluidState, CallbackInfoReturnable<Boolean> delegateInfo, CallbackInfo info) {
         if (!((Object) this instanceof WorldMesherFluidRenderer)) return;
         fabric_customRendering.set(true);
         info.cancel();
