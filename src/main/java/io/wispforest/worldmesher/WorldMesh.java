@@ -8,9 +8,11 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.VertexBuffer;
 import net.minecraft.client.render.*;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.fluid.FluidState;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Matrix4f;
 import net.minecraft.util.math.random.Random;
@@ -138,7 +140,8 @@ public class WorldMesh {
     }
 
     private void build() {
-        final var blockRenderManager = MinecraftClient.getInstance().getBlockRenderManager();
+        final var client = MinecraftClient.getInstance();
+        final var blockRenderManager = client.getBlockRenderManager();
         final var blockRenderer = new WorldMesherBlockModelRenderer();
         final var fluidRenderer = new WorldMesherFluidRenderer();
         MatrixStack matrices = matrixStackSupplier.get();
@@ -153,11 +156,21 @@ public class WorldMesh {
         int blocksToBuild = possess.size();
         final DynamicRenderInfo.Mutable tempRenderInfo = new DynamicRenderInfo.Mutable();
 
+        final var entitiesFuture = new CompletableFuture<List<DynamicRenderInfo.EntityEntry>>();
+        client.execute(() -> {
+            entitiesFuture.complete(
+                    client.world.getOtherEntities(client.player, new Box(this.origin, this.end), entity -> !(entity instanceof PlayerEntity))
+                            .stream()
+                            .map(entity -> new DynamicRenderInfo.EntityEntry(
+                                    entity, client.getEntityRenderDispatcher().getLight(entity, 0)
+                            )).toList()
+            );
+        });
+
         for (int i = 0; i < blocksToBuild; i++) {
             BlockPos pos = possess.get(i);
             BlockPos renderPos = pos.subtract(origin);
 
-            //TODO check if loaded
             BlockState state = world.getBlockState(pos);
             if (state.isAir()) continue;
 
@@ -211,7 +224,7 @@ public class WorldMesh {
 
         if (initializedLayers.containsKey(RenderLayer.getTranslucent())) {
             BufferBuilder bufferBuilder3 = initializedLayers.get(RenderLayer.getTranslucent());
-            Camera camera = MinecraftClient.getInstance().gameRenderer.getCamera();
+            Camera camera = client.gameRenderer.getCamera();
             bufferBuilder3.sortFrom((float) camera.getPos().x - (float) origin.getX(), (float) camera.getPos().y - (float) origin.getY(), (float) camera.getPos().z - (float) origin.getZ());
         }
 
@@ -229,6 +242,8 @@ public class WorldMesh {
             future.complete(null);
         });
         future.join();
+
+        entitiesFuture.join().forEach(entry -> tempRenderInfo.addEntity(entry.entity().getPos().subtract(origin.getX(), origin.getY(), origin.getZ()), entry));
         this.renderInfo = tempRenderInfo.toImmutable();
     }
 
