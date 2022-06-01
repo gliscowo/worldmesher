@@ -4,7 +4,6 @@
   "package": "io.wispforest.worldmesher.mixin",
   "compatibilityLevel": "JAVA_16",
   "client": [
-    "BlockModelRendererInvoker",
     "FluidRendererMixin",
     "MixinFluidRendererMixin"
   ],

@@ -1,27 +1,27 @@
 package io.wispforest.worldmesher;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import io.wispforest.worldmesher.renderers.WorldMesherBlockModelRenderer;
 import io.wispforest.worldmesher.renderers.WorldMesherFluidRenderer;
-import com.google.common.collect.Lists;
-import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.VertexBuffer;
 import net.minecraft.client.render.*;
-import net.minecraft.client.render.block.BlockRenderManager;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.fluid.FluidState;
 import net.minecraft.util.Util;
-import net.minecraft.util.crash.CrashReport;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Matrix4f;
+import net.minecraft.util.math.random.Random;
 import net.minecraft.world.World;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 public class WorldMesh {
 
@@ -53,7 +53,7 @@ public class WorldMesh {
         this.renderStartAction = renderStartAction;
         this.renderEndAction = renderEndAction;
 
-        this.bufferStorage = RenderLayer.getBlockLayers().stream().collect(Collectors.toMap((renderLayer) -> renderLayer, (renderLayer) -> new VertexBuffer()));
+        this.bufferStorage = new HashMap<>();
         this.initializedLayers = new HashMap<>();
         this.renderInfo = new DynamicRenderInfo();
 
@@ -83,6 +83,7 @@ public class WorldMesh {
             draw(translucent, bufferStorage.get(translucent), matrix);
         }
 
+        VertexBuffer.unbind();
     }
 
     public void setMatrixStackSupplier(Supplier<MatrixStack> stackSupplier) {
@@ -119,23 +120,30 @@ public class WorldMesh {
     }
 
     /**
-     * Schedules a rebuild a of this mesh
+     * Schedules a rebuild of this mesh
      */
     public void scheduleRebuild() {
         if (state.isBuildStage) return;
         state = state == MeshState.NEW ? MeshState.BUILDING : MeshState.REBUILDING;
         initializedLayers.clear();
 
-        CompletableFuture.runAsync(this::build, Util.getMainWorkerExecutor()).whenComplete((unused, throwable) -> state = MeshState.READY);
+        CompletableFuture.runAsync(this::build, Util.getMainWorkerExecutor()).whenComplete((unused, throwable) -> {
+            if (throwable != null) {
+                throwable.printStackTrace();
+                state = MeshState.NEW;
+            } else {
+                state = MeshState.READY;
+            }
+        });
     }
 
     private void build() {
-        final BlockRenderManager blockRenderManager = MinecraftClient.getInstance().getBlockRenderManager();
-        final WorldMesherBlockModelRenderer blockRenderer = new WorldMesherBlockModelRenderer();
-        final WorldMesherFluidRenderer fluidRenderer = new WorldMesherFluidRenderer();
+        final var blockRenderManager = MinecraftClient.getInstance().getBlockRenderManager();
+        final var blockRenderer = new WorldMesherBlockModelRenderer();
+        final var fluidRenderer = new WorldMesherFluidRenderer();
         MatrixStack matrices = matrixStackSupplier.get();
 
-        Random random = new Random();
+        Random random = Random.createLocal();
 
         List<BlockPos> possess = new ArrayList<>();
         for (BlockPos pos : BlockPos.iterate(this.origin, this.end)) {
@@ -207,29 +215,29 @@ public class WorldMesh {
             bufferBuilder3.sortFrom((float) camera.getPos().x - (float) origin.getX(), (float) camera.getPos().y - (float) origin.getY(), (float) camera.getPos().z - (float) origin.getZ());
         }
 
-        initializedLayers.values().forEach(BufferBuilder::end);
+        var future = new CompletableFuture<Void>();
+        RenderSystem.recordRenderCall(() -> {
+            initializedLayers.forEach((renderLayer, bufferBuilder) -> {
+                final var vertexBuffer = new VertexBuffer();
 
-        List<CompletableFuture<Void>> list = Lists.newArrayList();
-        initializedLayers.forEach((renderLayer, bufferBuilder) -> {
-            list.add(bufferStorage.get(renderLayer).submitUpload(bufferBuilder));
+                vertexBuffer.bind();
+                vertexBuffer.upload(bufferBuilder.end());
+
+                bufferStorage.put(renderLayer, vertexBuffer);
+            });
+
+            future.complete(null);
         });
-        Util.combine(list).handle((voids, throwable) -> {
-            if (throwable != null) {
-                CrashReport crashReport = CrashReport.create(throwable, "Building WorldMesher Mesh");
-                MinecraftClient.getInstance().setCrashReportSupplier(() -> MinecraftClient.getInstance().addDetailsToCrashReport(crashReport));
-            }
-            return true;
-        });
+        future.join();
         this.renderInfo = tempRenderInfo.toImmutable();
     }
 
     private void draw(RenderLayer renderLayer, VertexBuffer vertexBuffer, Matrix4f matrix) {
-        RenderSystem.setShader(GameRenderer::getPositionTexColorNormalShader);
-
         renderLayer.startDrawing();
         renderStartAction.run();
 
-        vertexBuffer.setShader(matrix, RenderSystem.getProjectionMatrix(), RenderSystem.getShader());
+        vertexBuffer.bind();
+        vertexBuffer.draw(matrix, RenderSystem.getProjectionMatrix(), RenderSystem.getShader());
 
         renderEndAction.run();
         renderLayer.endDrawing();
