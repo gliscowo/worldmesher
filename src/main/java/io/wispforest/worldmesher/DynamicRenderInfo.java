@@ -10,14 +10,14 @@ import java.util.HashMap;
 public class DynamicRenderInfo {
 
     protected HashMap<BlockPos, BlockEntity> blockEntities;
-    protected HashMap<Vec3d, Entity> entities;
+    protected HashMap<Vec3d, EntityEntry> entities;
 
     public DynamicRenderInfo() {
         this.blockEntities = new HashMap<>();
         this.entities = new HashMap<>();
     }
 
-    public DynamicRenderInfo(HashMap<BlockPos, BlockEntity> blockEntities, HashMap<Vec3d, Entity> entities) {
+    public DynamicRenderInfo(HashMap<BlockPos, BlockEntity> blockEntities, HashMap<Vec3d, EntityEntry> entities) {
         this.blockEntities = new HashMap<>(blockEntities);
         this.entities = new HashMap<>(entities);
     }
@@ -26,7 +26,7 @@ public class DynamicRenderInfo {
         return blockEntities;
     }
 
-    public HashMap<Vec3d, Entity> getEntities() {
+    public HashMap<Vec3d, EntityEntry> getEntities() {
         return entities;
     }
 
@@ -48,7 +48,7 @@ public class DynamicRenderInfo {
             super();
         }
 
-        public Mutable(HashMap<BlockPos, BlockEntity> blockEntities, HashMap<Vec3d, Entity> entities) {
+        public Mutable(HashMap<BlockPos, BlockEntity> blockEntities, HashMap<Vec3d, EntityEntry> entities) {
             super(blockEntities, entities);
         }
 
@@ -65,10 +65,12 @@ public class DynamicRenderInfo {
             this.blockEntities.put(pos, entity);
         }
 
-        public void addEntity(Vec3d pos, Entity entity) {
+        public void addEntity(Vec3d pos, EntityEntry entity) {
             this.entities.put(pos, entity);
         }
 
     }
+
+    public record EntityEntry(Entity entity, int light) {}
 
 }

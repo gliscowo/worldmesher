@@ -1,18 +1,19 @@
 package io.wispforest.worldmesher;
 
-import io.wispforest.worldmesher.renderers.WorldMesherBlockModelRenderer;
-import io.wispforest.worldmesher.renderers.WorldMesherFluidRenderer;
 import com.google.common.collect.Lists;
 import com.mojang.blaze3d.systems.RenderSystem;
+import io.wispforest.worldmesher.renderers.WorldMesherBlockModelRenderer;
+import io.wispforest.worldmesher.renderers.WorldMesherFluidRenderer;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.VertexBuffer;
 import net.minecraft.client.render.*;
-import net.minecraft.client.render.block.BlockRenderManager;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.util.crash.CrashReport;
+import net.minecraft.util.math.Box;
 import net.minecraft.fluid.FluidState;
 import net.minecraft.util.Util;
-import net.minecraft.util.crash.CrashReport;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Matrix4f;
@@ -21,7 +22,6 @@ import net.minecraft.world.World;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 public class WorldMesh {
 
@@ -53,7 +53,7 @@ public class WorldMesh {
         this.renderStartAction = renderStartAction;
         this.renderEndAction = renderEndAction;
 
-        this.bufferStorage = RenderLayer.getBlockLayers().stream().collect(Collectors.toMap((renderLayer) -> renderLayer, (renderLayer) -> new VertexBuffer()));
+        this.bufferStorage = new HashMap<>();
         this.initializedLayers = new HashMap<>();
         this.renderInfo = new DynamicRenderInfo();
 
@@ -83,6 +83,7 @@ public class WorldMesh {
             draw(translucent, bufferStorage.get(translucent), matrix);
         }
 
+        VertexBuffer.unbind();
     }
 
     public void setMatrixStackSupplier(Supplier<MatrixStack> stackSupplier) {
@@ -119,20 +120,28 @@ public class WorldMesh {
     }
 
     /**
-     * Schedules a rebuild a of this mesh
+     * Schedules a rebuild of this mesh
      */
     public void scheduleRebuild() {
         if (state.isBuildStage) return;
         state = state == MeshState.NEW ? MeshState.BUILDING : MeshState.REBUILDING;
         initializedLayers.clear();
 
-        CompletableFuture.runAsync(this::build, Util.getMainWorkerExecutor()).whenComplete((unused, throwable) -> state = MeshState.READY);
+        CompletableFuture.runAsync(this::build, Util.getMainWorkerExecutor()).whenComplete((unused, throwable) -> {
+            if (throwable != null) {
+                throwable.printStackTrace();
+                state = MeshState.NEW;
+            } else {
+                state = MeshState.READY;
+            }
+        });
     }
 
     private void build() {
-        final BlockRenderManager blockRenderManager = MinecraftClient.getInstance().getBlockRenderManager();
-        final WorldMesherBlockModelRenderer blockRenderer = new WorldMesherBlockModelRenderer();
-        final WorldMesherFluidRenderer fluidRenderer = new WorldMesherFluidRenderer();
+        final var client = MinecraftClient.getInstance();
+        final var blockRenderManager = client.getBlockRenderManager();
+        final var blockRenderer = new WorldMesherBlockModelRenderer();
+        final var fluidRenderer = new WorldMesherFluidRenderer();
         MatrixStack matrices = matrixStackSupplier.get();
 
         Random random = new Random();
@@ -145,11 +154,21 @@ public class WorldMesh {
         int blocksToBuild = possess.size();
         final DynamicRenderInfo.Mutable tempRenderInfo = new DynamicRenderInfo.Mutable();
 
+        final var entitiesFuture = new CompletableFuture<List<DynamicRenderInfo.EntityEntry>>();
+        client.execute(() -> {
+            entitiesFuture.complete(
+                    client.world.getOtherEntities(client.player, new Box(this.origin, this.end), entity -> !(entity instanceof PlayerEntity))
+                            .stream()
+                            .map(entity -> new DynamicRenderInfo.EntityEntry(
+                                    entity, client.getEntityRenderDispatcher().getLight(entity, 0)
+                            )).toList()
+            );
+        });
+
         for (int i = 0; i < blocksToBuild; i++) {
             BlockPos pos = possess.get(i);
             BlockPos renderPos = pos.subtract(origin);
 
-            //TODO check if loaded
             BlockState state = world.getBlockState(pos);
             if (state.isAir()) continue;
 
@@ -203,7 +222,7 @@ public class WorldMesh {
 
         if (initializedLayers.containsKey(RenderLayer.getTranslucent())) {
             BufferBuilder bufferBuilder3 = initializedLayers.get(RenderLayer.getTranslucent());
-            Camera camera = MinecraftClient.getInstance().gameRenderer.getCamera();
+            Camera camera = client.gameRenderer.getCamera();
             bufferBuilder3.sortFrom((float) camera.getPos().x - (float) origin.getX(), (float) camera.getPos().y - (float) origin.getY(), (float) camera.getPos().z - (float) origin.getZ());
         }
 
@@ -224,8 +243,6 @@ public class WorldMesh {
     }
 
     private void draw(RenderLayer renderLayer, VertexBuffer vertexBuffer, Matrix4f matrix) {
-        RenderSystem.setShader(GameRenderer::getPositionTexColorNormalShader);
-
         renderLayer.startDrawing();
         renderStartAction.run();
 
