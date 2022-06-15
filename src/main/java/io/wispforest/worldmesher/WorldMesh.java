@@ -14,11 +14,11 @@ import net.minecraft.client.gl.VertexBuffer;
 import net.minecraft.client.render.*;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.util.crash.CrashReport;
-import net.minecraft.util.math.Box;
 import net.minecraft.fluid.FluidState;
 import net.minecraft.util.Util;
+import net.minecraft.util.crash.CrashReport;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Matrix4f;
 import net.minecraft.world.World;
@@ -268,6 +268,8 @@ public class WorldMesh {
 
         List<CompletableFuture<Void>> list = Lists.newArrayList();
         initializedLayers.forEach((renderLayer, bufferBuilder) -> {
+            final var vertexBuffer = new VertexBuffer();
+            bufferStorage.put(renderLayer, vertexBuffer);
             list.add(bufferStorage.get(renderLayer).submitUpload(bufferBuilder));
         });
         Util.combine(list).handle((voids, throwable) -> {
@@ -276,7 +278,9 @@ public class WorldMesh {
                 MinecraftClient.getInstance().setCrashReportSupplier(() -> MinecraftClient.getInstance().addDetailsToCrashReport(crashReport));
             }
             return true;
-        });
+        }).join();
+
+        entitiesFuture.join().forEach(entry -> tempRenderInfo.addEntity(entry.entity().getPos().subtract(origin.getX(), origin.getY(), origin.getZ()), entry));
         this.renderInfo = tempRenderInfo.toImmutable();
     }
 
