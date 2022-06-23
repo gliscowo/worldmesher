@@ -7,6 +7,7 @@ import net.fabricmc.fabric.api.renderer.v1.RendererAccess;
 import net.fabricmc.fabric.api.renderer.v1.model.FabricBakedModel;
 import net.fabricmc.fabric.impl.client.indigo.renderer.IndigoRenderer;
 import net.fabricmc.fabric.impl.client.indigo.renderer.render.WorldMesherRenderContext;
+import net.minecraft.block.BlockRenderType;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.VertexBuffer;
@@ -252,7 +253,7 @@ public class WorldMesh {
             final var model = blockRenderManager.getModel(state);
             if (!((FabricBakedModel) model).isVanillaAdapter() && renderContext != null) {
                 renderContext.tessellateBlock(this.world, state, pos, model, matrices);
-            } else {
+            } else if(state.getRenderType() == BlockRenderType.MODEL) {
                 blockRenderer.render(this.world, model, state, pos, matrices, getOrCreateBuffer(renderLayer), cull, random, state.getRenderingSeed(pos), OverlayTexture.DEFAULT_UV);
             }
 
