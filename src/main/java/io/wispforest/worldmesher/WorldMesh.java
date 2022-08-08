@@ -93,7 +93,7 @@ public class WorldMesh {
             draw(translucent, bufferStorage.get(translucent), matrix);
         }
 
-        VertexBuffer.unbind();
+        if (!bufferStorage.isEmpty()) VertexBuffer.unbind();
     }
 
     public void setMatrixStackSupplier(Supplier<MatrixStack> stackSupplier) {
