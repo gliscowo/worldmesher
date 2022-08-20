@@ -36,8 +36,8 @@ public class WorldMesherRenderContext extends AbstractRenderContext {
 
         this.aoCalc = new AoCalculator(
                 blockInfo,
-                pos -> WorldRenderer.getLightmapCoordinates(blockView, blockView.getBlockState(pos), pos),
-                pos -> AoLuminanceFix.INSTANCE.apply(blockView, pos)
+                (pos, state) -> WorldRenderer.getLightmapCoordinates(blockView, state, pos),
+                (pos, state) -> AoLuminanceFix.INSTANCE.apply(blockView, pos, state)
         );
 
         this.meshConsumer = new AbstractMeshConsumer(blockInfo, bufferFunc, aoCalc, this::transform) {
