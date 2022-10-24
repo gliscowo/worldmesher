@@ -338,7 +338,7 @@ public class WorldMesh {
         }
 
         public Builder(BlockRenderView world, BlockPos origin, BlockPos end) {
-            this(world, origin, end, List::of);
+            this(world, origin, end, (except) -> List.of());
         }
 
         public Builder disableCulling() {
