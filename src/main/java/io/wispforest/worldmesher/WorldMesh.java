@@ -13,6 +13,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.VertexBuffer;
 import net.minecraft.client.render.*;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.fluid.FluidState;
 import net.minecraft.util.Util;
@@ -21,6 +22,7 @@ import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Matrix4f;
 import net.minecraft.util.math.random.Random;
+import net.minecraft.world.BlockRenderView;
 import net.minecraft.world.World;
 
 import java.util.ArrayList;
@@ -28,11 +30,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 public class WorldMesh {
 
-    private final World world;
+    private final BlockRenderView world;
     private final BlockPos origin;
     private final BlockPos end;
     private final boolean cull;
@@ -47,13 +50,14 @@ public class WorldMesh {
     private DynamicRenderInfo renderInfo;
     private boolean entitiesFrozen;
     private boolean freezeEntities;
+    private final Function<PlayerEntity, List<Entity>> entitySupplier;
 
     private final Runnable renderStartAction;
     private final Runnable renderEndAction;
 
     private Supplier<MatrixStack> matrixStackSupplier = MatrixStack::new;
 
-    private WorldMesh(World world, BlockPos origin, BlockPos end, boolean cull, boolean freezeEntities, Runnable renderStartAction, Runnable renderEndAction) {
+    private WorldMesh(BlockRenderView world, BlockPos origin, BlockPos end, boolean cull, boolean freezeEntities, Runnable renderStartAction, Runnable renderEndAction, Function<PlayerEntity, List<Entity>> entitySupplier) {
         this.world = world;
         this.origin = origin;
         this.end = end;
@@ -61,6 +65,7 @@ public class WorldMesh {
         this.cull = cull;
         this.freezeEntities = freezeEntities;
         this.dimensions = new Box(this.origin, this.end);
+        this.entitySupplier = entitySupplier;
 
         this.renderStartAction = renderStartAction;
         this.renderEndAction = renderEndAction;
@@ -193,7 +198,7 @@ public class WorldMesh {
         final var entitiesFuture = new CompletableFuture<List<DynamicRenderInfo.EntityEntry>>();
         client.execute(() -> {
             entitiesFuture.complete(
-                    client.world.getOtherEntities(client.player, new Box(this.origin, this.end).expand(.5), entity -> !(entity instanceof PlayerEntity))
+                    this.entitySupplier.apply(client.player)
                             .stream()
                             .map(entity -> {
                                 if (freezeEntities) {
@@ -310,7 +315,8 @@ public class WorldMesh {
 
     public static class Builder {
 
-        private final World world;
+        private final BlockRenderView world;
+        private final Function<PlayerEntity, List<Entity>> entitySupplier;
 
         private final BlockPos origin;
         private final BlockPos end;
@@ -320,10 +326,19 @@ public class WorldMesh {
         private Runnable startAction = () -> {};
         private Runnable endAction = () -> {};
 
-        public Builder(World world, BlockPos origin, BlockPos end) {
+        public Builder(BlockRenderView world, BlockPos origin, BlockPos end, Function<PlayerEntity, List<Entity>> entitySupplier) {
             this.world = world;
             this.origin = origin;
             this.end = end;
+            this.entitySupplier = entitySupplier;
+        }
+
+        public Builder(World world, BlockPos origin, BlockPos end) {
+            this(world, origin, end, (except) -> world.getOtherEntities(except, new Box(origin, end).expand(.5), entity -> !(entity instanceof PlayerEntity)));
+        }
+
+        public Builder(BlockRenderView world, BlockPos origin, BlockPos end) {
+            this(world, origin, end, List::of);
         }
 
         public Builder disableCulling() {
@@ -346,7 +361,7 @@ public class WorldMesh {
             BlockPos start = new BlockPos(Math.min(origin.getX(), end.getX()), Math.min(origin.getY(), end.getY()), Math.min(origin.getZ(), end.getZ()));
             BlockPos target = new BlockPos(Math.max(origin.getX(), end.getX()), Math.max(origin.getY(), end.getY()), Math.max(origin.getZ(), end.getZ()));
 
-            return new WorldMesh(world, start, target, cull, freezeEntities, startAction, endAction);
+            return new WorldMesh(world, start, target, cull, freezeEntities, startAction, endAction, entitySupplier);
         }
     }
 
