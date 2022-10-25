@@ -294,7 +294,9 @@ public class WorldMesh {
                 vertexBuffer.bind();
                 vertexBuffer.upload(bufferBuilder.end());
 
-                bufferStorage.put(renderLayer, vertexBuffer);
+                final var discardedBuffer = bufferStorage.put(renderLayer, vertexBuffer);
+                if (discardedBuffer != null)
+                    discardedBuffer.close();
             });
 
             future.complete(null);
