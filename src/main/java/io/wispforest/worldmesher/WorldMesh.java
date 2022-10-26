@@ -50,7 +50,6 @@ public class WorldMesh {
     private DynamicRenderInfo renderInfo;
     private boolean entitiesFrozen;
     private boolean freezeEntities;
-    private boolean clearBufferMap;
     private final Function<PlayerEntity, List<Entity>> entitySupplier;
 
     private final Runnable renderStartAction;
@@ -160,17 +159,10 @@ public class WorldMesh {
     /**
      * Schedules a rebuild of this mesh
      */
-
     public void scheduleRebuild() {
-        this.scheduleRebuild(false);
-    }
-
-    public void scheduleRebuild(boolean clearBuffers) {
         if (state.isBuildStage) return;
         state = state == MeshState.NEW ? MeshState.BUILDING : MeshState.REBUILDING;
         initializedLayers.clear();
-
-        this.clearBufferMap = clearBuffers;
 
         CompletableFuture.runAsync(this::build, Util.getMainWorkerExecutor()).whenComplete((unused, throwable) -> {
             if (throwable != null) {
@@ -283,10 +275,8 @@ public class WorldMesh {
 
         var future = new CompletableFuture<Void>();
         RenderSystem.recordRenderCall(() -> {
-            if (clearBufferMap) {
-                bufferStorage.forEach((renderLayer, vertexBuffer) -> vertexBuffer.close());
-                bufferStorage.clear();
-            }
+            bufferStorage.forEach((renderLayer, vertexBuffer) -> vertexBuffer.close());
+            bufferStorage.clear();
 
             initializedLayers.forEach((renderLayer, bufferBuilder) -> {
                 final var vertexBuffer = new VertexBuffer();
