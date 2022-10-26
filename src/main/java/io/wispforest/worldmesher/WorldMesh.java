@@ -39,6 +39,11 @@ public class WorldMesh {
     private final BlockPos origin;
     private final BlockPos end;
     private final boolean cull;
+    /**
+     * Whether the AO and culling algorithm will consider
+     * block neighbors outside the render volume.
+     */
+    private final boolean useGlobalNeighbors;
     private final Box dimensions;
 
     private MeshState state = MeshState.NEW;
@@ -57,12 +62,13 @@ public class WorldMesh {
 
     private Supplier<MatrixStack> matrixStackSupplier = MatrixStack::new;
 
-    private WorldMesh(BlockRenderView world, BlockPos origin, BlockPos end, boolean cull, boolean freezeEntities, Runnable renderStartAction, Runnable renderEndAction, Function<PlayerEntity, List<Entity>> entitySupplier) {
+    private WorldMesh(BlockRenderView world, BlockPos origin, BlockPos end, boolean cull, boolean useGlobalNeighbors, boolean freezeEntities, Runnable renderStartAction, Runnable renderEndAction, Function<PlayerEntity, List<Entity>> entitySupplier) {
         this.world = world;
         this.origin = origin;
         this.end = end;
 
         this.cull = cull;
+        this.useGlobalNeighbors = useGlobalNeighbors;
         this.freezeEntities = freezeEntities;
         this.dimensions = new Box(this.origin, this.end);
         this.entitySupplier = entitySupplier;
@@ -245,13 +251,15 @@ public class WorldMesh {
             matrices.push();
             matrices.translate(renderPos.getX(), renderPos.getY(), renderPos.getZ());
 
+            var alwaysDrawVolumeEdges = !useGlobalNeighbors;
+
             blockRenderer.clearCullingOverrides();
-            blockRenderer.setCullDirection(Direction.EAST, pos.getX() == this.end.getX());
-            blockRenderer.setCullDirection(Direction.WEST, pos.getX() == this.origin.getX());
-            blockRenderer.setCullDirection(Direction.SOUTH, pos.getZ() == this.end.getZ());
-            blockRenderer.setCullDirection(Direction.NORTH, pos.getZ() == this.origin.getZ());
-            blockRenderer.setCullDirection(Direction.UP, pos.getY() == this.end.getY());
-            blockRenderer.setCullDirection(Direction.DOWN, pos.getY() == this.origin.getY());
+            blockRenderer.setCullDirection(Direction.EAST, alwaysDrawVolumeEdges && pos.getX() == this.end.getX());
+            blockRenderer.setCullDirection(Direction.WEST, alwaysDrawVolumeEdges && pos.getX() == this.origin.getX());
+            blockRenderer.setCullDirection(Direction.SOUTH, alwaysDrawVolumeEdges && pos.getZ() == this.end.getZ());
+            blockRenderer.setCullDirection(Direction.NORTH, alwaysDrawVolumeEdges && pos.getZ() == this.origin.getZ());
+            blockRenderer.setCullDirection(Direction.UP, alwaysDrawVolumeEdges && pos.getY() == this.end.getY());
+            blockRenderer.setCullDirection(Direction.DOWN, alwaysDrawVolumeEdges && pos.getY() == this.origin.getY());
 
             RenderLayer renderLayer = RenderLayers.getBlockLayer(state);
 
@@ -326,6 +334,7 @@ public class WorldMesh {
         private final BlockPos origin;
         private final BlockPos end;
         private boolean cull = true;
+        private boolean useGlobalNeighbors = false;
         private boolean freezeEntities = false;
 
         private Runnable startAction = () -> {};
@@ -351,6 +360,11 @@ public class WorldMesh {
             return this;
         }
 
+        public Builder enableGlobalNeighbors() {
+            this.useGlobalNeighbors = true;
+            return this;
+        }
+
         public Builder freezeEntities() {
             this.freezeEntities = true;
             return this;
@@ -366,7 +380,7 @@ public class WorldMesh {
             BlockPos start = new BlockPos(Math.min(origin.getX(), end.getX()), Math.min(origin.getY(), end.getY()), Math.min(origin.getZ(), end.getZ()));
             BlockPos target = new BlockPos(Math.max(origin.getX(), end.getX()), Math.max(origin.getY(), end.getY()), Math.max(origin.getZ(), end.getZ()));
 
-            return new WorldMesh(world, start, target, cull, freezeEntities, startAction, endAction, entitySupplier);
+            return new WorldMesh(world, start, target, cull, useGlobalNeighbors, freezeEntities, startAction, endAction, entitySupplier);
         }
     }
 
