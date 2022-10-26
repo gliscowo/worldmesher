@@ -275,13 +275,18 @@ public class WorldMesh {
 
         var future = new CompletableFuture<Void>();
         RenderSystem.recordRenderCall(() -> {
+            bufferStorage.forEach((renderLayer, vertexBuffer) -> vertexBuffer.close());
+            bufferStorage.clear();
+
             initializedLayers.forEach((renderLayer, bufferBuilder) -> {
                 final var vertexBuffer = new VertexBuffer();
 
                 vertexBuffer.bind();
                 vertexBuffer.upload(bufferBuilder.end());
 
-                bufferStorage.put(renderLayer, vertexBuffer);
+                final var discardedBuffer = bufferStorage.put(renderLayer, vertexBuffer);
+                if (discardedBuffer != null)
+                    discardedBuffer.close();
             });
 
             future.complete(null);
