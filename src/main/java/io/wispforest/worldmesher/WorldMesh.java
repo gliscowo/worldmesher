@@ -156,6 +156,13 @@ public class WorldMesh {
         return dimensions;
     }
 
+    public void reset() {
+        this.bufferStorage.forEach((renderLayer, vertexBuffer) -> vertexBuffer.close());
+        this.bufferStorage.clear();
+
+        this.initializedLayers.clear();
+    }
+
     /**
      * Schedules a rebuild of this mesh
      */
