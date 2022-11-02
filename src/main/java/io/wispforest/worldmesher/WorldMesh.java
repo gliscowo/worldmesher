@@ -30,6 +30,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -160,11 +161,20 @@ public class WorldMesh {
      * Schedules a rebuild of this mesh
      */
     public void scheduleRebuild() {
-        if (state.isBuildStage) return;
+        scheduleRebuild(Util.getMainWorkerExecutor());
+    }
+
+    /**
+     * Schedules a rebuild of this mesh on the specified executor
+     *
+     * @return The asynchronous task reference
+     */
+    public CompletableFuture<Void> scheduleRebuild(Executor executor) {
+        if (state.isBuildStage) return CompletableFuture.completedFuture(null);
         state = state == MeshState.NEW ? MeshState.BUILDING : MeshState.REBUILDING;
         initializedLayers.clear();
 
-        CompletableFuture.runAsync(this::build, Util.getMainWorkerExecutor()).whenComplete((unused, throwable) -> {
+        return CompletableFuture.runAsync(this::build, executor).whenComplete((unused, throwable) -> {
             if (throwable != null) {
                 throwable.printStackTrace();
                 state = MeshState.NEW;
