@@ -360,7 +360,7 @@ public class WorldMesh {
             return this;
         }
 
-        public Builder enableGlobalNeighbors() {
+        public Builder useGlobalNeighbors() {
             this.useGlobalNeighbors = true;
             return this;
         }
