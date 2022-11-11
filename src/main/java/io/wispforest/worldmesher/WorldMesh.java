@@ -157,6 +157,18 @@ public class WorldMesh {
     }
 
     /**
+     * Release unmanaged vertex buffers and clear all initialized
+     * layers. Resulting mesh state is ready to accept new vertex
+     * data.
+     */
+    public void clear() {
+        this.bufferStorage.forEach((renderLayer, vertexBuffer) -> vertexBuffer.close());
+        this.bufferStorage.clear();
+
+        this.initializedLayers.clear();
+    }
+
+    /**
      * Schedules a rebuild of this mesh
      */
     public void scheduleRebuild() {
