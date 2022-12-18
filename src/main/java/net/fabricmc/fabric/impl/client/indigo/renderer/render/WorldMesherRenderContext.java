@@ -15,13 +15,14 @@ import net.minecraft.util.crash.CrashException;
 import net.minecraft.util.crash.CrashReport;
 import net.minecraft.util.crash.CrashReportSection;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Matrix3f;
-import net.minecraft.util.math.Matrix4f;
 import net.minecraft.world.BlockRenderView;
+import org.joml.Matrix3f;
+import org.joml.Matrix4f;
 
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+@SuppressWarnings("UnstableApiUsage")
 public class WorldMesherRenderContext extends AbstractRenderContext {
 
     private final TerrainBlockRenderInfo blockInfo;
