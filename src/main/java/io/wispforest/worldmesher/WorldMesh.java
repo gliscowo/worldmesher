@@ -8,30 +8,28 @@ import net.fabricmc.fabric.api.renderer.v1.model.FabricBakedModel;
 import net.fabricmc.fabric.impl.client.indigo.renderer.IndigoRenderer;
 import net.fabricmc.fabric.impl.client.indigo.renderer.render.WorldMesherRenderContext;
 import net.minecraft.block.BlockRenderType;
-import net.minecraft.block.BlockState;
+import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.VertexBuffer;
 import net.minecraft.client.render.*;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.fluid.FluidState;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.math.random.Random;
 import net.minecraft.world.BlockRenderView;
 import net.minecraft.world.World;
 import org.joml.Matrix4f;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
-import java.util.function.Supplier;
 
 public class WorldMesh {
 
@@ -60,8 +58,6 @@ public class WorldMesh {
     private final Runnable renderStartAction;
     private final Runnable renderEndAction;
 
-    private Supplier<MatrixStack> matrixStackSupplier = MatrixStack::new;
-
     private WorldMesh(BlockRenderView world, BlockPos origin, BlockPos end, boolean cull, boolean useGlobalNeighbors, boolean freezeEntities, Runnable renderStartAction, Runnable renderEndAction, Function<PlayerEntity, List<Entity>> entitySupplier) {
         this.world = world;
         this.origin = origin;
@@ -89,28 +85,23 @@ public class WorldMesh {
      * @param matrices The translation matrices. This is applied to the entire mesh
      */
     public void render(MatrixStack matrices) {
-
-        final var matrix = matrices.peek().getPositionMatrix();
-
         if (!this.canRender()) {
             throw new IllegalStateException("World mesh not prepared!");
         }
 
-        final RenderLayer translucent = RenderLayer.getTranslucent();
-        bufferStorage.forEach((renderLayer, vertexBuffer) -> {
+        var matrix = matrices.peek().getPositionMatrix();
+        var translucent = RenderLayer.getTranslucent();
+
+        this.bufferStorage.forEach((renderLayer, vertexBuffer) -> {
             if (renderLayer == translucent) return;
             draw(renderLayer, vertexBuffer, matrix);
         });
 
-        if (bufferStorage.containsKey(translucent)) {
+        if (this.bufferStorage.containsKey(translucent)) {
             draw(translucent, bufferStorage.get(translucent), matrix);
         }
 
         VertexBuffer.unbind();
-    }
-
-    public void setMatrixStackSupplier(Supplier<MatrixStack> stackSupplier) {
-        this.matrixStackSupplier = stackSupplier;
     }
 
     /**
@@ -197,58 +188,55 @@ public class WorldMesh {
         final var blockRenderManager = client.getBlockRenderManager();
         final var blockRenderer = new WorldMesherBlockModelRenderer();
         final var fluidRenderer = new WorldMesherFluidRenderer();
-        MatrixStack matrices = matrixStackSupplier.get();
+        final var matrices = new MatrixStack();
 
         var renderContext = RendererAccess.INSTANCE.getRenderer() instanceof IndigoRenderer ?
                 new WorldMesherRenderContext(this.world, this::getOrCreateBuffer) : null;
 
         Random random = Random.createLocal();
 
-        List<BlockPos> possess = new ArrayList<>();
-        for (BlockPos pos : BlockPos.iterate(this.origin, this.end)) {
-            possess.add(pos.toImmutable());
-        }
-
-        int blocksToBuild = possess.size();
-        final DynamicRenderInfo.Mutable tempRenderInfo = new DynamicRenderInfo.Mutable();
-
         this.entitiesFrozen = this.freezeEntities;
         final var entitiesFuture = new CompletableFuture<List<DynamicRenderInfo.EntityEntry>>();
-        client.execute(() -> {
-            entitiesFuture.complete(
-                    this.entitySupplier.apply(client.player)
-                            .stream()
-                            .map(entity -> {
-                                if (freezeEntities) {
-                                    var originalEntity = entity;
-                                    entity = entity.getType().create(client.world);
+        client.execute(() -> entitiesFuture.complete(
+                this.entitySupplier.apply(client.player)
+                        .stream()
+                        .map(entity -> {
+                            if (freezeEntities) {
+                                var originalEntity = entity;
+                                entity = entity.getType().create(client.world);
 
-                                    entity.copyFrom(originalEntity);
-                                    entity.copyPositionAndRotation(originalEntity);
-                                    entity.tick();
-                                }
+                                entity.copyFrom(originalEntity);
+                                entity.copyPositionAndRotation(originalEntity);
+                                entity.tick();
+                            }
 
-                                return new DynamicRenderInfo.EntityEntry(
-                                        entity,
-                                        client.getEntityRenderDispatcher().getLight(entity, 0)
-                                );
-                            }).toList()
-            );
-        });
+                            return new DynamicRenderInfo.EntityEntry(
+                                    entity,
+                                    client.getEntityRenderDispatcher().getLight(entity, 0)
+                            );
+                        }).toList()
+        ));
 
-        for (int i = 0; i < blocksToBuild; i++) {
-            BlockPos pos = possess.get(i);
-            BlockPos renderPos = pos.subtract(origin);
+        int blocksToBuild = (this.origin.getX() - this.end.getX() - 1)
+                * (this.origin.getY() - this.end.getY() - 1)
+                * (this.origin.getZ() - this.end.getZ() - 1);
 
-            BlockState state = world.getBlockState(pos);
+        var blockEntities = new HashMap<BlockPos, BlockEntity>();
+
+        int currentBlockIndex = 0;
+        for (var pos : BlockPos.iterate(this.origin, this.end)) {
+            var renderPos = pos.subtract(origin);
+
+            var state = world.getBlockState(pos);
             if (state.isAir()) continue;
 
-            if (world.getBlockEntity(pos) != null) tempRenderInfo.addBlockEntity(renderPos, world.getBlockEntity(pos));
+            if (world.getBlockEntity(pos) != null) {
+                blockEntities.put(renderPos, world.getBlockEntity(pos));
+            }
 
             if (!world.getFluidState(pos).isEmpty()) {
-
-                FluidState fluidState = world.getFluidState(pos);
-                RenderLayer fluidLayer = RenderLayers.getFluidLayer(fluidState);
+                var fluidState = world.getFluidState(pos);
+                var fluidLayer = RenderLayers.getFluidLayer(fluidState);
 
                 matrices.push();
                 matrices.translate(-(pos.getX() & 15), -(pos.getY() & 15), -(pos.getZ() & 15));
@@ -263,7 +251,7 @@ public class WorldMesh {
             matrices.push();
             matrices.translate(renderPos.getX(), renderPos.getY(), renderPos.getZ());
 
-            var alwaysDrawVolumeEdges = !useGlobalNeighbors;
+            boolean alwaysDrawVolumeEdges = !this.useGlobalNeighbors;
 
             blockRenderer.clearCullingOverrides();
             blockRenderer.setCullDirection(Direction.EAST, alwaysDrawVolumeEdges && pos.getX() == this.end.getX());
@@ -273,23 +261,26 @@ public class WorldMesh {
             blockRenderer.setCullDirection(Direction.UP, alwaysDrawVolumeEdges && pos.getY() == this.end.getY());
             blockRenderer.setCullDirection(Direction.DOWN, alwaysDrawVolumeEdges && pos.getY() == this.origin.getY());
 
-            RenderLayer renderLayer = RenderLayers.getBlockLayer(state);
+            var blockLayer = RenderLayers.getBlockLayer(state);
 
             final var model = blockRenderManager.getModel(state);
-            if (!((FabricBakedModel) model).isVanillaAdapter() && renderContext != null) {
+            if (renderContext != null && !((FabricBakedModel) model).isVanillaAdapter()) {
                 renderContext.tessellateBlock(this.world, state, pos, model, matrices);
-            } else if(state.getRenderType() == BlockRenderType.MODEL) {
-                blockRenderer.render(this.world, model, state, pos, matrices, getOrCreateBuffer(renderLayer), cull, random, state.getRenderingSeed(pos), OverlayTexture.DEFAULT_UV);
+            } else if (state.getRenderType() == BlockRenderType.MODEL) {
+                blockRenderer.render(this.world, model, state, pos, matrices, getOrCreateBuffer(blockLayer), cull, random, state.getRenderingSeed(pos), OverlayTexture.DEFAULT_UV);
             }
 
             matrices.pop();
 
-            this.buildProgress = i / (float) blocksToBuild;
+            this.buildProgress = (currentBlockIndex + 1) / (float) blocksToBuild;
+            currentBlockIndex++;
         }
 
-        if (initializedLayers.containsKey(RenderLayer.getTranslucent())) {
-            var translucentBuilder = initializedLayers.get(RenderLayer.getTranslucent());
+        if (this.initializedLayers.containsKey(RenderLayer.getTranslucent())) {
+            var translucentBuilder = this.initializedLayers.get(RenderLayer.getTranslucent());
             var camera = client.gameRenderer.getCamera();
+
+            // TODO this camera position should probably be customizable
             translucentBuilder.sortFrom((float) camera.getPos().x - (float) origin.getX(), (float) camera.getPos().y - (float) origin.getY(), (float) camera.getPos().z - (float) origin.getZ());
         }
 
@@ -313,8 +304,17 @@ public class WorldMesh {
         });
         future.join();
 
-        entitiesFuture.join().forEach(entry -> tempRenderInfo.addEntity(entry.entity().getPos().subtract(origin.getX(), origin.getY(), origin.getZ()), entry));
-        this.renderInfo = tempRenderInfo.toImmutable();
+        var entities = new HashMap<Vec3d, DynamicRenderInfo.EntityEntry>();
+        for (var entityEntry : entitiesFuture.join()) {
+            entities.put(
+                    entityEntry.entity().getPos().subtract(this.origin.getX(), this.origin.getY(), this.origin.getZ()),
+                    entityEntry
+            );
+        }
+
+        this.renderInfo = new DynamicRenderInfo(
+                blockEntities, entities
+        );
     }
 
     private VertexConsumer getOrCreateBuffer(RenderLayer layer) {

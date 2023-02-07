@@ -34,43 +34,6 @@ public class DynamicRenderInfo {
         return blockEntities.isEmpty() && entities.isEmpty();
     }
 
-    public Mutable toMutable() {
-        return new Mutable(this);
-    }
-
-    public DynamicRenderInfo toImmutable() {
-        return new DynamicRenderInfo(blockEntities, entities);
-    }
-
-    public static class Mutable extends DynamicRenderInfo {
-
-        public Mutable() {
-            super();
-        }
-
-        public Mutable(HashMap<BlockPos, BlockEntity> blockEntities, HashMap<Vec3d, EntityEntry> entities) {
-            super(blockEntities, entities);
-        }
-
-        private Mutable(DynamicRenderInfo parent) {
-            super(parent.blockEntities, parent.entities);
-        }
-
-        public void clear() {
-            blockEntities.clear();
-            entities.clear();
-        }
-
-        public void addBlockEntity(BlockPos pos, BlockEntity entity) {
-            this.blockEntities.put(pos, entity);
-        }
-
-        public void addEntity(Vec3d pos, EntityEntry entity) {
-            this.entities.put(pos, entity);
-        }
-
-    }
-
     public record EntityEntry(Entity entity, int light) {}
 
 }
