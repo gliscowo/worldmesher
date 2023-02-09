@@ -52,7 +52,7 @@ public class WorldMesh {
     private final Runnable renderEndAction;
 
     private final Function<PlayerEntity, List<Entity>> entitySupplier;
-    private DynamicRenderInfo renderInfo;
+    private DynamicRenderInfo renderInfo = DynamicRenderInfo.EMPTY;
     private boolean entitiesFrozen;
     private boolean freezeEntities;
 
@@ -63,7 +63,7 @@ public class WorldMesh {
     private @Nullable CompletableFuture<Void> buildFuture = null;
 
     // Vertex storage
-    private final Map<RenderLayer, VertexBuffer> bufferStorage;
+    private final Map<RenderLayer, VertexBuffer> bufferStorage = new HashMap<>();
 
     private WorldMesh(BlockRenderView world, BlockPos origin, BlockPos end, boolean cull, boolean useGlobalNeighbors, boolean freezeEntities, Runnable renderStartAction, Runnable renderEndAction, Function<PlayerEntity, List<Entity>> entitySupplier) {
         this.world = world;
@@ -78,9 +78,6 @@ public class WorldMesh {
 
         this.renderStartAction = renderStartAction;
         this.renderEndAction = renderEndAction;
-
-        this.bufferStorage = new HashMap<>();
-        this.renderInfo = new DynamicRenderInfo();
 
         this.scheduleRebuild();
     }
