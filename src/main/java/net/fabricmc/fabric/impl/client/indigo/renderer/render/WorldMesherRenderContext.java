@@ -25,21 +25,27 @@ import java.util.function.Function;
 @SuppressWarnings("UnstableApiUsage")
 public class WorldMesherRenderContext extends AbstractRenderContext {
 
-    private final TerrainBlockRenderInfo blockInfo;
+    private final BlockRenderInfo blockInfo;
     private final AoCalculator aoCalc;
 
     private final AbstractMeshConsumer meshConsumer;
     private final TerrainFallbackConsumer fallbackConsumer;
 
     public WorldMesherRenderContext(BlockRenderView blockView, Function<RenderLayer, VertexConsumer> bufferFunc) {
-        this.blockInfo = new TerrainBlockRenderInfo();
-        this.blockInfo.setBlockView(blockView);
+        this.blockInfo = new BlockRenderInfo();
+        this.blockInfo.prepareForWorld(blockView, true);
 
-        this.aoCalc = new AoCalculator(
-                blockInfo,
-                (pos, state) -> WorldRenderer.getLightmapCoordinates(blockView, state, pos),
-                (pos, state) -> AoLuminanceFix.INSTANCE.apply(blockView, pos, state)
-        );
+        this.aoCalc = new AoCalculator(blockInfo) {
+            @Override
+            public int light(BlockPos pos, BlockState state) {
+                return WorldRenderer.getLightmapCoordinates(blockView, state, pos);
+            }
+
+            @Override
+            public float ao(BlockPos pos, BlockState state) {
+                return AoLuminanceFix.INSTANCE.apply(blockView, pos, state);
+            }
+        };
 
         this.meshConsumer = new AbstractMeshConsumer(blockInfo, bufferFunc, aoCalc, this::transform) {
             @Override
