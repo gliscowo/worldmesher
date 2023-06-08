@@ -1,6 +1,7 @@
 package io.wispforest.worldmesher;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.systems.VertexSorter;
 import io.wispforest.worldmesher.renderers.WorldMesherBlockModelRenderer;
 import io.wispforest.worldmesher.renderers.WorldMesherFluidRenderer;
 import net.fabricmc.fabric.api.renderer.v1.RendererAccess;
@@ -361,7 +362,7 @@ public class WorldMesh {
             var camera = client.gameRenderer.getCamera();
 
             // TODO this camera position should probably be customizable
-            translucentBuilder.sortFrom((float) camera.getPos().x - (float) origin.getX(), (float) camera.getPos().y - (float) origin.getY(), (float) camera.getPos().z - (float) origin.getZ());
+            translucentBuilder.setSorter(VertexSorter.byDistance((float) camera.getPos().x - (float) origin.getX(), (float) camera.getPos().y - (float) origin.getY(), (float) camera.getPos().z - (float) origin.getZ()));
         }
 
         var future = new CompletableFuture<Void>();
@@ -370,7 +371,7 @@ public class WorldMesh {
             this.bufferStorage.clear();
 
             builderStorage.forEach((renderLayer, bufferBuilder) -> {
-                var newBuffer = new VertexBuffer();
+                var newBuffer = new VertexBuffer(VertexBuffer.Usage.STATIC);
 
                 newBuffer.bind();
                 newBuffer.upload(bufferBuilder.end());

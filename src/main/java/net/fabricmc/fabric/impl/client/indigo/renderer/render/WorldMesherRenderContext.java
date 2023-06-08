@@ -104,7 +104,7 @@ public class WorldMesherRenderContext extends AbstractRenderContext {
     }
 
     @Override
-    public Consumer<BakedModel> fallbackConsumer() {
+    public BakedModelConsumer bakedModelConsumer() {
         return this.fallbackConsumer;
     }
 
