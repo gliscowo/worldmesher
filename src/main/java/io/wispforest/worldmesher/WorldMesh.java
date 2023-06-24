@@ -294,7 +294,8 @@ public class WorldMesh {
 
                         return new DynamicRenderInfo.EntityEntry(
                                 entity,
-                                client.getEntityRenderDispatcher().getLight(entity, 0)
+                                client.getEntityRenderDispatcher().getLight(entity, 0),
+                                entity.getPos().subtract(this.origin.getX(), this.origin.getY(), this.origin.getZ())
                         );
                     }).toList());
         });
@@ -386,17 +387,7 @@ public class WorldMesh {
         });
         future.join();
 
-        var entities = new HashMap<Vec3d, DynamicRenderInfo.EntityEntry>();
-        for (var entityEntry : entitiesFuture.join()) {
-            entities.put(
-                    entityEntry.entity().getPos().subtract(this.origin.getX(), this.origin.getY(), this.origin.getZ()),
-                    entityEntry
-            );
-        }
-
-        this.renderInfo = new DynamicRenderInfo(
-                blockEntities, entities
-        );
+        this.renderInfo = new DynamicRenderInfo(blockEntities, entitiesFuture.join());
     }
 
     private VertexConsumer getOrCreateBuilder(Map<RenderLayer, BufferBuilder> builderStorage, RenderLayer layer) {
@@ -430,7 +421,10 @@ public class WorldMesh {
         }
 
         public Builder(World world, BlockPos origin, BlockPos end) {
-            this(world, origin, end, (except) -> world.getOtherEntities(except, new Box(origin, end).expand(.5), entity -> !(entity instanceof PlayerEntity)));
+            this(world, origin, end, (except) -> world.getOtherEntities(except, new Box(
+                    Math.min(origin.getX(), end.getX()), Math.min(origin.getY(), end.getY()), Math.min(origin.getZ(), end.getZ()),
+                    Math.max(origin.getX(), end.getX()) + 1, Math.max(origin.getY(), end.getY()) + 1, Math.max(origin.getZ(), end.getZ()) + 1
+                    ), entity -> !(entity instanceof PlayerEntity)));
         }
 
         public Builder(BlockRenderView world, BlockPos origin, BlockPos end) {
