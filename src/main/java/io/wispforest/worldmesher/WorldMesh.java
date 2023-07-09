@@ -1,11 +1,11 @@
 package io.wispforest.worldmesher;
 
+import com.google.common.collect.HashMultimap;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.systems.VertexSorter;
 import io.wispforest.worldmesher.renderers.WorldMesherBlockModelRenderer;
 import io.wispforest.worldmesher.renderers.WorldMesherFluidRenderer;
 import net.fabricmc.fabric.api.renderer.v1.RendererAccess;
-import net.fabricmc.fabric.api.renderer.v1.model.FabricBakedModel;
 import net.fabricmc.fabric.impl.client.indigo.renderer.IndigoRenderer;
 import net.fabricmc.fabric.impl.client.indigo.renderer.render.WorldMesherRenderContext;
 import net.minecraft.block.BlockRenderType;
@@ -24,6 +24,7 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.math.random.Random;
 import net.minecraft.world.BlockRenderView;
 import net.minecraft.world.World;
+import org.apache.commons.lang3.function.TriFunction;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.slf4j.Logger;
@@ -52,7 +53,7 @@ public class WorldMesh {
     private final Runnable renderStartAction;
     private final Runnable renderEndAction;
 
-    private final Function<PlayerEntity, List<Entity>> entitySupplier;
+    private final TriFunction<PlayerEntity, BlockPos, BlockPos, List<Entity>> entitySupplier;
     private DynamicRenderInfo renderInfo = DynamicRenderInfo.EMPTY;
     private boolean entitiesFrozen;
     private boolean freezeEntities;
@@ -66,7 +67,7 @@ public class WorldMesh {
     // Vertex storage
     private final Map<RenderLayer, VertexBuffer> bufferStorage = new HashMap<>();
 
-    private WorldMesh(BlockRenderView world, BlockPos origin, BlockPos end, boolean cull, boolean useGlobalNeighbors, boolean freezeEntities, Runnable renderStartAction, Runnable renderEndAction, Function<PlayerEntity, List<Entity>> entitySupplier) {
+    private WorldMesh(BlockRenderView world, BlockPos origin, BlockPos end, boolean cull, boolean useGlobalNeighbors, boolean freezeEntities, Runnable renderStartAction, Runnable renderEndAction, TriFunction<PlayerEntity, BlockPos, BlockPos, List<Entity>> entitySupplier) {
         this.world = world;
         this.origin = origin;
         this.end = end;
@@ -280,7 +281,7 @@ public class WorldMesh {
         this.entitiesFrozen = this.freezeEntities;
         var entitiesFuture = new CompletableFuture<List<DynamicRenderInfo.EntityEntry>>();
         client.execute(() -> {
-            entitiesFuture.complete(this.entitySupplier.apply(client.player)
+            entitiesFuture.complete(this.entitySupplier.apply(client.player, this.origin, this.end.add(1, 1, 1))
                     .stream()
                     .map(entity -> {
                         if (this.freezeEntities) {
@@ -348,7 +349,7 @@ public class WorldMesh {
             var blockLayer = RenderLayers.getBlockLayer(state);
 
             final var model = blockRenderManager.getModel(state);
-            if (renderContext != null && !((FabricBakedModel) model).isVanillaAdapter()) {
+            if (renderContext != null && !model.isVanillaAdapter()) {
                 renderContext.tessellateBlock(this.world, state, pos, model, matrices);
             } else if (state.getRenderType() == BlockRenderType.MODEL) {
                 blockRenderer.render(this.world, model, state, pos, matrices, this.getOrCreateBuilder(builderStorage, blockLayer), cull, random, state.getRenderingSeed(pos), OverlayTexture.DEFAULT_UV);
@@ -386,7 +387,7 @@ public class WorldMesh {
         });
         future.join();
 
-        var entities = new HashMap<Vec3d, DynamicRenderInfo.EntityEntry>();
+        var entities = HashMultimap.<Vec3d, DynamicRenderInfo.EntityEntry>create();
         for (var entityEntry : entitiesFuture.join()) {
             entities.put(
                     entityEntry.entity().getPos().subtract(this.origin.getX(), this.origin.getY(), this.origin.getZ()),
@@ -411,7 +412,7 @@ public class WorldMesh {
     public static class Builder {
 
         private final BlockRenderView world;
-        private final Function<PlayerEntity, List<Entity>> entitySupplier;
+        private final TriFunction<PlayerEntity, BlockPos, BlockPos, List<Entity>> entitySupplier;
 
         private final BlockPos origin;
         private final BlockPos end;
@@ -419,10 +420,20 @@ public class WorldMesh {
         private boolean useGlobalNeighbors = false;
         private boolean freezeEntities = false;
 
-        private Runnable startAction = () -> {};
-        private Runnable endAction = () -> {};
+        private Runnable startAction = () -> {
+        };
+        private Runnable endAction = () -> {
+        };
 
+        @Deprecated(forRemoval = true)
         public Builder(BlockRenderView world, BlockPos origin, BlockPos end, Function<PlayerEntity, List<Entity>> entitySupplier) {
+            this.world = world;
+            this.origin = origin;
+            this.end = end;
+            this.entitySupplier = (player, $, $$) -> entitySupplier.apply(player);
+        }
+
+        public Builder(BlockRenderView world, BlockPos origin, BlockPos end, TriFunction<PlayerEntity, BlockPos, BlockPos, List<Entity>> entitySupplier) {
             this.world = world;
             this.origin = origin;
             this.end = end;
@@ -430,7 +441,7 @@ public class WorldMesh {
         }
 
         public Builder(World world, BlockPos origin, BlockPos end) {
-            this(world, origin, end, (except) -> world.getOtherEntities(except, new Box(origin, end).expand(.5), entity -> !(entity instanceof PlayerEntity)));
+            this(world, origin, end, (except, min, max) -> world.getOtherEntities(except, new Box(min, max), entity -> !(entity instanceof PlayerEntity)));
         }
 
         public Builder(BlockRenderView world, BlockPos origin, BlockPos end) {
