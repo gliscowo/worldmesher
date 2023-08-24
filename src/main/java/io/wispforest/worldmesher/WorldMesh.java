@@ -3,6 +3,8 @@ package io.wispforest.worldmesher;
 import com.google.common.collect.HashMultimap;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.systems.VertexSorter;
+import io.wispforest.worldmesher.mixin.BufferBuilderAccessor;
+import io.wispforest.worldmesher.mixin.GlAllocationUtilsAccessor;
 import io.wispforest.worldmesher.renderers.WorldMesherBlockModelRenderer;
 import io.wispforest.worldmesher.renderers.WorldMesherFluidRenderer;
 import net.fabricmc.fabric.api.renderer.v1.RendererAccess;
@@ -27,6 +29,7 @@ import net.minecraft.world.World;
 import org.apache.commons.lang3.function.TriFunction;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
+import org.lwjgl.system.MemoryUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -376,6 +379,10 @@ public class WorldMesh {
 
                 newBuffer.bind();
                 newBuffer.upload(bufferBuilder.end());
+
+                GlAllocationUtilsAccessor.worldmesher$getAllocator().free(
+                        MemoryUtil.memAddress(((BufferBuilderAccessor) bufferBuilder).worldmesher$getBuffer(), 0)
+                );
 
                 var discardedBuffer = this.bufferStorage.put(renderLayer, newBuffer);
                 if (discardedBuffer != null) {

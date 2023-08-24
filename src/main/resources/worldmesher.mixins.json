@@ -4,7 +4,9 @@
   "package": "io.wispforest.worldmesher.mixin",
   "compatibilityLevel": "JAVA_16",
   "client": [
+    "BufferBuilderAccessor",
     "FluidRendererMixin",
+    "GlAllocationUtilsAccessor",
     "MixinFluidRendererMixin"
   ],
   "injectors": {
