@@ -10,6 +10,7 @@ import io.wispforest.worldmesher.renderers.WorldMesherFluidRenderer;
 import net.fabricmc.fabric.api.renderer.v1.RendererAccess;
 import net.fabricmc.fabric.impl.client.indigo.renderer.IndigoRenderer;
 import net.fabricmc.fabric.impl.client.indigo.renderer.render.WorldMesherRenderContext;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.BlockRenderType;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.client.MinecraftClient;
@@ -277,9 +278,20 @@ public class WorldMesh {
         var builderStorage = new HashMap<RenderLayer, BufferBuilder>();
         var random = Random.createLocal();
 
-        //noinspection UnstableApiUsage
-        var renderContext = RendererAccess.INSTANCE.getRenderer() instanceof IndigoRenderer ?
-                new WorldMesherRenderContext(this.world, layer -> this.getOrCreateBuilder(builderStorage, layer)) : null;
+        WorldMesherRenderContext renderContext = null;
+        try {
+            //noinspection UnstableApiUsage
+            renderContext = RendererAccess.INSTANCE.getRenderer() instanceof IndigoRenderer
+                    ? new WorldMesherRenderContext(this.world, layer -> this.getOrCreateBuilder(builderStorage, layer))
+                    : null;
+        } catch (Throwable throwable) {
+            var fabricApiVersion = FabricLoader.getInstance().getModContainer("worldmesher").get().getMetadata().getCustomValue("worldmesher:fabric_api_build_version").getAsString();
+            LOGGER.error(
+                    "Could not create a context for rendering Fabric API models. This is most likely due to an incompatible Fabric API version - this build of WorldMesher was compiled against '{}', try that instead",
+                    fabricApiVersion,
+                    throwable
+            );
+        }
 
         this.entitiesFrozen = this.freezeEntities;
         var entitiesFuture = new CompletableFuture<List<DynamicRenderInfo.EntityEntry>>();
