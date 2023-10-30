@@ -396,6 +396,9 @@ public class WorldMesh {
                         MemoryUtil.memAddress(((BufferBuilderAccessor) bufferBuilder).worldmesher$getBuffer(), 0)
                 );
 
+                // primarily here to inform ModernFix about what we did
+                ((BufferBuilderAccessor) bufferBuilder).worldmesher$setBuffer(null);
+
                 var discardedBuffer = this.bufferStorage.put(renderLayer, newBuffer);
                 if (discardedBuffer != null) {
                     discardedBuffer.close();

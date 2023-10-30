@@ -10,4 +10,7 @@ import java.nio.ByteBuffer;
 public interface BufferBuilderAccessor {
     @Accessor("buffer")
     ByteBuffer worldmesher$getBuffer();
+
+    @Accessor("buffer")
+    void worldmesher$setBuffer(ByteBuffer buffer);
 }
