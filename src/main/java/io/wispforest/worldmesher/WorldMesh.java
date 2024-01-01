@@ -343,7 +343,7 @@ public class WorldMesh {
                 matrices.translate(renderPos.getX(), renderPos.getY(), renderPos.getZ());
 
                 fluidRenderer.setMatrix(matrices.peek().getPositionMatrix());
-                fluidRenderer.render(world, pos, this.getOrCreateBuilder(builderStorage, fluidLayer), state, fluidState);
+                fluidRenderer.render(world, pos.offset(Direction.DOWN, 15), this.getOrCreateBuilder(builderStorage, fluidLayer), state, fluidState);
 
                 matrices.pop();
             }
