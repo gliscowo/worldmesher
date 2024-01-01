@@ -339,8 +339,8 @@ public class WorldMesh {
                 var fluidLayer = RenderLayers.getFluidLayer(fluidState);
 
                 matrices.push();
-              //  matrices.translate(-(pos.getX() & 15), -(pos.getY() & 15), -(pos.getZ() & 15));
-                matrices.translate(renderPos.getX(), renderPos.getY(), renderPos.getZ());
+                //matrices.translate(-(pos.getX() & 15), -(pos.getY() & 15), -(pos.getZ() & 15));
+                //matrices.translate(renderPos.getX(), renderPos.getY(), renderPos.getZ());
 
                 fluidRenderer.setMatrix(matrices.peek().getPositionMatrix());
                 fluidRenderer.render(world, pos, this.getOrCreateBuilder(builderStorage, fluidLayer), state, fluidState);
