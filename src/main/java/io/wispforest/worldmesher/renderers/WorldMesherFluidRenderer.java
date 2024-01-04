@@ -10,6 +10,7 @@ import net.minecraft.client.render.block.FluidRenderer;
 import net.minecraft.client.texture.Sprite;
 import net.minecraft.fluid.Fluid;
 import net.minecraft.fluid.FluidState;
+import net.minecraft.fluid.Fluids;
 import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
@@ -34,7 +35,7 @@ public class WorldMesherFluidRenderer extends FluidRenderer {
 
     @Override
     public void render(BlockRenderView world, BlockPos pos, VertexConsumer vertexConsumer, BlockState blockState, FluidState fluidState) {
-        boolean bl = fluidState.isIn(FluidTags.LAVA);
+        boolean bl = (fluidState.getFluid() == Fluids.LAVA) | (fluidState.getFluid() == Fluids.FLOWING_LAVA) | fluidState.isIn(FluidTags.LAVA);
         Sprite[] sprites = bl ? this.lavaSprites : this.waterSprites;
         int i = bl ? 16777215 : BiomeColors.getWaterColor(world, pos);
         float f = (float)(i >> 16 & 255) / 255.0F;
