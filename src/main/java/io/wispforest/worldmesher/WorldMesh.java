@@ -79,7 +79,7 @@ public class WorldMesh {
         this.cull = cull;
         this.useGlobalNeighbors = useGlobalNeighbors;
         this.freezeEntities = freezeEntities;
-        this.dimensions = new Box(this.origin, this.end);
+        this.dimensions = Box.enclosing(this.origin, this.end);
         this.entitySupplier = entitySupplier;
 
         this.renderStartAction = renderStartAction;
@@ -463,7 +463,7 @@ public class WorldMesh {
         }
 
         public Builder(World world, BlockPos origin, BlockPos end) {
-            this(world, origin, end, (except, min, max) -> world.getOtherEntities(except, new Box(min, max), entity -> !(entity instanceof PlayerEntity)));
+            this(world, origin, end, (except, min, max) -> world.getOtherEntities(except, Box.enclosing(min, max), entity -> !(entity instanceof PlayerEntity)));
         }
 
         public Builder(BlockRenderView world, BlockPos origin, BlockPos end) {
