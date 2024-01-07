@@ -28,7 +28,7 @@ public class WorldMesherBlockModelRenderer extends BlockModelRenderer {
 
     public void setCullDirection(Direction direction, boolean alwaysDraw) {
         if (!alwaysDraw) return;
-        cullingOverrides |= (1 << direction.getId());
+        cullingOverrides |= (byte) (1 << direction.getId());
     }
 
     public void clearCullingOverrides() {
