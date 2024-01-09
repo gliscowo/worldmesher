@@ -280,7 +280,7 @@ public class WorldMesh {
 
         WorldMesherRenderContext renderContext = null;
         try {
-            if (FabricLoader.getInstance().getModContainer("fabric-api").get().getMetadata().getVersion().getFriendlyString().equals("0.91.0+1.10.4+1.20.1")) {
+            if (FabricLoader.getInstance().getModContainer("fabric-api").get().getMetadata().containsCustomValue("fabric-api:forgified_version")) {
                 renderContext = new WorldMesherRenderContext(this.world, layer -> this.getOrCreateBuilder(builderStorage, layer));
             } else {
                 //noinspection UnstableApiUsage
