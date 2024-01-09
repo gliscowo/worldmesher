@@ -280,10 +280,14 @@ public class WorldMesh {
 
         WorldMesherRenderContext renderContext = null;
         try {
-            //noinspection UnstableApiUsage
-            renderContext = RendererAccess.INSTANCE.getRenderer() instanceof IndigoRenderer
-                    ? new WorldMesherRenderContext(this.world, layer -> this.getOrCreateBuilder(builderStorage, layer))
-                    : null;
+            if (FabricLoader.getInstance().getModContainer("fabric-api").get().getMetadata().getVersion().getFriendlyString().equals("0.91.0+1.10.4+1.20.1")) {
+                renderContext = new WorldMesherRenderContext(this.world, layer -> this.getOrCreateBuilder(builderStorage, layer));
+            } else {
+                //noinspection UnstableApiUsage
+                renderContext = RendererAccess.INSTANCE.getRenderer() instanceof IndigoRenderer
+                        ? new WorldMesherRenderContext(this.world, layer -> this.getOrCreateBuilder(builderStorage, layer))
+                        : null;
+            }
         } catch (Throwable throwable) {
             var fabricApiVersion = FabricLoader.getInstance().getModContainer("worldmesher").get().getMetadata().getCustomValue("worldmesher:fabric_api_build_version").getAsString();
             LOGGER.error(
