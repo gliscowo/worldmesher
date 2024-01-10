@@ -277,21 +277,7 @@ public class WorldMesh {
         var builderStorage = new HashMap<RenderLayer, BufferBuilder>();
         var random = Random.createLocal();
 
-        WorldMesherRenderContext renderContext = null;
-        try {
-                //noinspection UnstableApiUsage
-                renderContext = RendererAccess.INSTANCE.getRenderer() instanceof IndigoRenderer
-                        ? new WorldMesherRenderContext(this.world, layer -> this.getOrCreateBuilder(builderStorage, layer))
-                        : null;
-                System.out.println(renderContext);
-        } catch (Throwable throwable) {
-            var fabricApiVersion = FabricLoader.getInstance().getModContainer("worldmesher").get().getMetadata().getCustomValue("worldmesher:fabric_api_build_version").getAsString();
-            LOGGER.error(
-                    "Could not create a context for rendering Fabric API models. This is most likely due to an incompatible Fabric API version - this build of WorldMesher was compiled against '{}', try that instead",
-                    fabricApiVersion,
-                    throwable
-            );
-        }
+        WorldMesherRenderContext renderContext = new WorldMesherRenderContext(this.world, layer -> this.getOrCreateBuilder(builderStorage, layer));
 
         this.entitiesFrozen = this.freezeEntities;
         var entitiesFuture = new CompletableFuture<List<DynamicRenderInfo.EntityEntry>>();
