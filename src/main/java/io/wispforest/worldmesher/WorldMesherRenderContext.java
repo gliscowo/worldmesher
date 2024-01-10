@@ -1,7 +1,9 @@
-package net.fabricmc.fabric.impl.client.indigo.renderer.render;
+package io.wispforest.worldmesher;
 
 import net.fabricmc.fabric.impl.client.indigo.renderer.aocalc.AoCalculator;
 import net.fabricmc.fabric.impl.client.indigo.renderer.aocalc.AoLuminanceFix;
+import net.fabricmc.fabric.impl.client.indigo.renderer.render.AbstractBlockRenderContext;
+import net.fabricmc.fabric.impl.client.indigo.renderer.render.BlockRenderInfo;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
@@ -13,7 +15,6 @@ import net.minecraft.util.crash.CrashReport;
 import net.minecraft.util.crash.CrashReportSection;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.math.random.Random;
 import net.minecraft.world.BlockRenderView;
 
 import java.util.function.Function;
@@ -29,7 +30,7 @@ public class WorldMesherRenderContext extends AbstractBlockRenderContext {
         this.bufferFunc = bufferFunc;
 
         this.blockInfo.prepareForWorld(blockView, true);
-        this.blockInfo.random = Random.create();
+       // this.blockInfo.random = Random.create();
     }
 
     public void tessellateBlock(BlockRenderView blockView, BlockState blockState, BlockPos blockPos, final BakedModel model, MatrixStack matrixStack) {
@@ -40,7 +41,7 @@ public class WorldMesherRenderContext extends AbstractBlockRenderContext {
             this.matrix = matrixStack.peek().getPositionMatrix();
             this.normalMatrix = matrixStack.peek().getNormalMatrix();
 
-            blockInfo.recomputeSeed = true;
+           // blockInfo.recomputeSeed = true;
 
             aoCalc.clear();
             blockInfo.prepareForBlock(blockState, blockPos, model.useAmbientOcclusion());
