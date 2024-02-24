@@ -1,4 +1,4 @@
-package io.wispforest.worldmesher.renderers;
+package io.wispforest.worldmesher.render;
 
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;

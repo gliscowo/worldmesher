@@ -5,8 +5,8 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.systems.VertexSorter;
 import io.wispforest.worldmesher.mixin.BufferBuilderAccessor;
 import io.wispforest.worldmesher.mixin.GlAllocationUtilsAccessor;
-import io.wispforest.worldmesher.renderers.WorldMesherBlockModelRenderer;
-import io.wispforest.worldmesher.renderers.WorldMesherFluidRenderer;
+import io.wispforest.worldmesher.render.FluidVertexConsumer;
+import io.wispforest.worldmesher.render.WorldMesherBlockModelRenderer;
 import net.fabricmc.fabric.api.renderer.v1.RendererAccess;
 import net.fabricmc.fabric.impl.client.indigo.renderer.IndigoRenderer;
 import net.fabricmc.fabric.impl.client.indigo.renderer.render.WorldMesherRenderContext;
@@ -272,7 +272,6 @@ public class WorldMesh {
         var blockRenderManager = client.getBlockRenderManager();
 
         var blockRenderer = new WorldMesherBlockModelRenderer();
-        var fluidRenderer = new WorldMesherFluidRenderer();
 
         var matrices = new MatrixStack();
         var builderStorage = new HashMap<RenderLayer, BufferBuilder>();
@@ -342,8 +341,7 @@ public class WorldMesh {
                 matrices.translate(-(pos.getX() & 15), -(pos.getY() & 15), -(pos.getZ() & 15));
                 matrices.translate(renderPos.getX(), renderPos.getY(), renderPos.getZ());
 
-                fluidRenderer.setMatrix(matrices.peek().getPositionMatrix());
-                fluidRenderer.render(world, pos, this.getOrCreateBuilder(builderStorage, fluidLayer), state, fluidState);
+                blockRenderManager.renderFluid(pos, world, new FluidVertexConsumer(this.getOrCreateBuilder(builderStorage, fluidLayer), matrices.peek().getPositionMatrix()), state, fluidState);
 
                 matrices.pop();
             }

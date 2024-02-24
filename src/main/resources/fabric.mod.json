@@ -3,13 +3,16 @@
   "id": "worldmesher",
   "version": "${version}",
   "name": "Worldmesher",
-  "description": "",
+  "description": "Library for meshing world sections into self-contained renderable objects",
   "authors": [
     "glisco"
   ],
-  "contact": {},
+  "contact": {
+    "sources": "https://github.com/gliscowo/worldmesher",
+    "issues": "https://github.com/gliscowo/worldmesher/issues"
+  },
   "license": "MIT",
-  "environment": "*",
+  "environment": "client",
   "icon": "assets/worldmesher/icon.png",
   "accessWidener": "worldmesher.accesswidener",
   "mixins": [
@@ -26,6 +29,6 @@
   "depends": {
     "fabricloader": ">=0.11.3",
     "fabric": ">=0.85.0",
-    "minecraft": ">=1.19.3"
+    "minecraft": ">=1.20.3"
   }
 }
