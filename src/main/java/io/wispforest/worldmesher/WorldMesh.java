@@ -6,7 +6,7 @@ import com.mojang.blaze3d.systems.VertexSorter;
 import io.wispforest.worldmesher.mixin.BufferBuilderAccessor;
 import io.wispforest.worldmesher.mixin.GlAllocationUtilsAccessor;
 import io.wispforest.worldmesher.render.FluidVertexConsumer;
-import io.wispforest.worldmesher.render.WorldMesherBlockModelRenderer;
+import io.wispforest.worldmesher.render.MeshRenderView;
 import net.fabricmc.fabric.api.renderer.v1.RendererAccess;
 import net.fabricmc.fabric.impl.client.indigo.renderer.IndigoRenderer;
 import net.fabricmc.fabric.impl.client.indigo.renderer.render.WorldMesherRenderContext;
@@ -22,7 +22,6 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.math.random.Random;
 import net.minecraft.world.BlockRenderView;
@@ -47,12 +46,10 @@ public class WorldMesh {
 
     // Render setup data
     private final BlockRenderView world;
-    private final BlockPos origin;
-    private final BlockPos end;
+    private final BlockPos from, to;
     private final Box dimensions;
 
     private final boolean cull;
-    private final boolean useGlobalNeighbors;
 
     private final Runnable renderStartAction;
     private final Runnable renderEndAction;
@@ -71,15 +68,17 @@ public class WorldMesh {
     // Vertex storage
     private final Map<RenderLayer, VertexBuffer> bufferStorage = new HashMap<>();
 
-    private WorldMesh(BlockRenderView world, BlockPos origin, BlockPos end, boolean cull, boolean useGlobalNeighbors, boolean freezeEntities, Runnable renderStartAction, Runnable renderEndAction, TriFunction<PlayerEntity, BlockPos, BlockPos, List<Entity>> entitySupplier) {
-        this.world = world;
-        this.origin = origin;
-        this.end = end;
+    private WorldMesh(BlockRenderView world, BlockPos from, BlockPos to, boolean cull, boolean useGlobalNeighbors, boolean freezeEntities, Runnable renderStartAction, Runnable renderEndAction, TriFunction<PlayerEntity, BlockPos, BlockPos, List<Entity>> entitySupplier) {
+        this.from = from;
+        this.to = to;
+
+        this.world = useGlobalNeighbors
+                ? world
+                : new MeshRenderView(world, from, to);
 
         this.cull = cull;
-        this.useGlobalNeighbors = useGlobalNeighbors;
         this.freezeEntities = freezeEntities;
-        this.dimensions = Box.enclosing(this.origin, this.end);
+        this.dimensions = Box.enclosing(this.from, this.to);
         this.entitySupplier = entitySupplier;
 
         this.renderStartAction = renderStartAction;
@@ -186,14 +185,14 @@ public class WorldMesh {
      * @return The origin position of this mesh's area
      */
     public BlockPos startPos() {
-        return this.origin;
+        return this.from;
     }
 
     /**
      * @return The end position of this mesh's area
      */
     public BlockPos endPos() {
-        return this.end;
+        return this.to;
     }
 
     public boolean entitiesFrozen() {
@@ -271,8 +270,6 @@ public class WorldMesh {
         var client = MinecraftClient.getInstance();
         var blockRenderManager = client.getBlockRenderManager();
 
-        var blockRenderer = new WorldMesherBlockModelRenderer();
-
         var matrices = new MatrixStack();
         var builderStorage = new HashMap<RenderLayer, BufferBuilder>();
         var random = Random.createLocal();
@@ -295,7 +292,7 @@ public class WorldMesh {
         this.entitiesFrozen = this.freezeEntities;
         var entitiesFuture = new CompletableFuture<List<DynamicRenderInfo.EntityEntry>>();
         client.execute(() -> {
-            entitiesFuture.complete(this.entitySupplier.apply(client.player, this.origin, this.end.add(1, 1, 1))
+            entitiesFuture.complete(this.entitySupplier.apply(client.player, this.from, this.to.add(1, 1, 1))
                     .stream()
                     .map(entity -> {
                         if (this.freezeEntities) {
@@ -317,18 +314,18 @@ public class WorldMesh {
         var blockEntities = new HashMap<BlockPos, BlockEntity>();
 
         int currentBlockIndex = 0;
-        int blocksToBuild = (this.end.getX() - this.origin.getX() + 1)
-                * (this.end.getY() - this.origin.getY() + 1)
-                * (this.end.getZ() - this.origin.getZ() + 1);
+        int blocksToBuild = (this.to.getX() - this.from.getX() + 1)
+                * (this.to.getY() - this.from.getY() + 1)
+                * (this.to.getZ() - this.from.getZ() + 1);
 
-        for (var pos : BlockPos.iterate(this.origin, this.end)) {
+        for (var pos : BlockPos.iterate(this.from, this.to)) {
             currentBlockIndex++;
             this.buildProgress = currentBlockIndex / (float) blocksToBuild;
 
             var state = world.getBlockState(pos);
             if (state.isAir()) continue;
 
-            var renderPos = pos.subtract(origin);
+            var renderPos = pos.subtract(from);
             if (world.getBlockEntity(pos) != null) {
                 blockEntities.put(renderPos, world.getBlockEntity(pos));
             }
@@ -349,23 +346,13 @@ public class WorldMesh {
             matrices.push();
             matrices.translate(renderPos.getX(), renderPos.getY(), renderPos.getZ());
 
-            boolean alwaysDrawVolumeEdges = !this.useGlobalNeighbors;
-
-            blockRenderer.clearCullingOverrides();
-            blockRenderer.setCullDirection(Direction.EAST, alwaysDrawVolumeEdges && pos.getX() == this.end.getX());
-            blockRenderer.setCullDirection(Direction.WEST, alwaysDrawVolumeEdges && pos.getX() == this.origin.getX());
-            blockRenderer.setCullDirection(Direction.SOUTH, alwaysDrawVolumeEdges && pos.getZ() == this.end.getZ());
-            blockRenderer.setCullDirection(Direction.NORTH, alwaysDrawVolumeEdges && pos.getZ() == this.origin.getZ());
-            blockRenderer.setCullDirection(Direction.UP, alwaysDrawVolumeEdges && pos.getY() == this.end.getY());
-            blockRenderer.setCullDirection(Direction.DOWN, alwaysDrawVolumeEdges && pos.getY() == this.origin.getY());
-
             var blockLayer = RenderLayers.getBlockLayer(state);
 
             final var model = blockRenderManager.getModel(state);
             if (renderContext != null && !model.isVanillaAdapter()) {
                 renderContext.tessellateBlock(this.world, state, pos, model, matrices);
             } else if (state.getRenderType() == BlockRenderType.MODEL) {
-                blockRenderer.render(this.world, model, state, pos, matrices, this.getOrCreateBuilder(builderStorage, blockLayer), cull, random, state.getRenderingSeed(pos), OverlayTexture.DEFAULT_UV);
+                blockRenderManager.getModelRenderer().render(this.world, model, state, pos, matrices, this.getOrCreateBuilder(builderStorage, blockLayer), cull, random, state.getRenderingSeed(pos), OverlayTexture.DEFAULT_UV);
             }
 
             matrices.pop();
@@ -376,7 +363,7 @@ public class WorldMesh {
             var camera = client.gameRenderer.getCamera();
 
             // TODO this camera position should probably be customizable
-            translucentBuilder.setSorter(VertexSorter.byDistance((float) camera.getPos().x - (float) origin.getX(), (float) camera.getPos().y - (float) origin.getY(), (float) camera.getPos().z - (float) origin.getZ()));
+            translucentBuilder.setSorter(VertexSorter.byDistance((float) camera.getPos().x - (float) from.getX(), (float) camera.getPos().y - (float) from.getY(), (float) camera.getPos().z - (float) from.getZ()));
         }
 
         var future = new CompletableFuture<Void>();
@@ -410,7 +397,7 @@ public class WorldMesh {
         var entities = HashMultimap.<Vec3d, DynamicRenderInfo.EntityEntry>create();
         for (var entityEntry : entitiesFuture.join()) {
             entities.put(
-                    entityEntry.entity().getPos().subtract(this.origin.getX(), this.origin.getY(), this.origin.getZ()),
+                    entityEntry.entity().getPos().subtract(this.from.getX(), this.from.getY(), this.from.getZ()),
                     entityEntry
             );
         }
