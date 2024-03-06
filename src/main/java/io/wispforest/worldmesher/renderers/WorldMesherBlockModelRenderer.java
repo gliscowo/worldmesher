@@ -66,7 +66,7 @@ public class WorldMesherBlockModelRenderer extends BlockModelRenderer {
             List<BakedQuad> list = model.getQuads(state, direction, random);
             if (!list.isEmpty()) {
                 mutable.set(pos, direction);
-                if (!cull || shouldAlwaysDraw(direction) || Block.shouldDrawSide(state, world, pos, direction, mutable) || state.isSolidBlock(world, pos.offset(direction))) {
+                if (!cull || shouldAlwaysDraw(direction) || Block.shouldDrawSide(state, world, pos, direction, mutable) || world.getBlockState(pos).isSolidBlock(world, pos.offset(direction))) {
                     this.renderQuadsSmooth(world, state, !shouldAlwaysDraw(direction) ? pos : pos.add(0, 500, 0), matrices, vertexConsumer, list, fs, bitSet, ambientOcclusionCalculator, overlay);
                 }
             }
@@ -89,7 +89,7 @@ public class WorldMesherBlockModelRenderer extends BlockModelRenderer {
             List<BakedQuad> list = model.getQuads(state, direction, random);
             if (!list.isEmpty()) {
                 mutable.set(pos, direction);
-                if (!cull || shouldAlwaysDraw(direction) || Block.shouldDrawSide(state, world, pos, direction, mutable)) {
+                if (!cull || shouldAlwaysDraw(direction) || Block.shouldDrawSide(state, world, pos, direction, mutable) || world.getBlockState(pos).isSolidBlock(world, pos.offset(direction))) {
                     int i = WorldRenderer.getLightmapCoordinates(world, state, mutable);
                     this.renderQuadsFlat(world, state, !shouldAlwaysDraw(direction) ? pos : pos.add(0, 500, 0), i, overlay, false, matrices, vertexConsumer, list, bitSet);
                 }

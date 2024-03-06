@@ -352,15 +352,15 @@ public class WorldMesh {
             matrices.push();
             matrices.translate(renderPos.getX(), renderPos.getY(), renderPos.getZ());
 
-            boolean alwaysDrawVolumeEdges = !this.useGlobalNeighbors;
+           // boolean alwaysDrawVolumeEdges = this.useGlobalNeighbors;
 
             blockRenderer.clearCullingOverrides();
-            blockRenderer.setCullDirection(Direction.EAST, alwaysDrawVolumeEdges && pos.getX() == this.end.getX());
-            blockRenderer.setCullDirection(Direction.WEST, alwaysDrawVolumeEdges && pos.getX() == this.origin.getX());
-            blockRenderer.setCullDirection(Direction.SOUTH, alwaysDrawVolumeEdges && pos.getZ() == this.end.getZ());
-            blockRenderer.setCullDirection(Direction.NORTH, alwaysDrawVolumeEdges && pos.getZ() == this.origin.getZ());
-            blockRenderer.setCullDirection(Direction.UP, alwaysDrawVolumeEdges && pos.getY() == this.end.getY());
-            blockRenderer.setCullDirection(Direction.DOWN, alwaysDrawVolumeEdges && pos.getY() == this.origin.getY());
+            blockRenderer.setCullDirection(Direction.EAST, pos.getX() == this.end.getX());
+            blockRenderer.setCullDirection(Direction.WEST, pos.getX() == this.origin.getX());
+            blockRenderer.setCullDirection(Direction.SOUTH, pos.getZ() == this.end.getZ());
+            blockRenderer.setCullDirection(Direction.NORTH, pos.getZ() == this.origin.getZ());
+            blockRenderer.setCullDirection(Direction.UP, pos.getY() == this.end.getY());
+            blockRenderer.setCullDirection(Direction.DOWN, pos.getY() == this.origin.getY());
 
             var blockLayer = RenderLayers.getBlockLayer(state);
 
