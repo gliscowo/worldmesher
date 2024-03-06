@@ -27,14 +27,6 @@ import java.util.List;
 public class WorldMesherBlockModelRenderer extends BlockModelRenderer {
 
     private static final Direction[] DIRECTIONS = Direction.values();
-    private static final ThreadLocal<Object2ByteLinkedOpenHashMap<Block.NeighborGroup>> FACE_CULL_MAP = ThreadLocal.withInitial(() -> {
-        Object2ByteLinkedOpenHashMap<Block.NeighborGroup> object2ByteLinkedOpenHashMap = new Object2ByteLinkedOpenHashMap<Block.NeighborGroup>(2048, 0.25F) {
-            protected void rehash(int newN) {
-            }
-        };
-        object2ByteLinkedOpenHashMap.defaultReturnValue((byte)127);
-        return object2ByteLinkedOpenHashMap;
-    });
     private byte cullingOverrides = 0;
 
     public WorldMesherBlockModelRenderer() {
@@ -51,6 +43,7 @@ public class WorldMesherBlockModelRenderer extends BlockModelRenderer {
     }
 
     private boolean shouldAlwaysDraw(Direction direction) {
+        System.out.println((cullingOverrides & (1 << direction.getId())) != 0);
         return (cullingOverrides & (1 << direction.getId())) != 0;
     }
 
@@ -66,7 +59,7 @@ public class WorldMesherBlockModelRenderer extends BlockModelRenderer {
             List<BakedQuad> list = model.getQuads(state, direction, random);
             if (!list.isEmpty()) {
                 mutable.set(pos, direction);
-                if (!cull || shouldAlwaysDraw(direction) || Block.shouldDrawSide(state, world, pos, direction, mutable) || world.getBlockState(pos).isSolidBlock(world, pos.offset(direction))) {
+                if (!cull || shouldAlwaysDraw(direction) || Block.shouldDrawSide(state, world, pos, direction, mutable)) {
                     this.renderQuadsSmooth(world, state, !shouldAlwaysDraw(direction) ? pos : pos.add(0, 500, 0), matrices, vertexConsumer, list, fs, bitSet, ambientOcclusionCalculator, overlay);
                 }
             }
@@ -89,7 +82,7 @@ public class WorldMesherBlockModelRenderer extends BlockModelRenderer {
             List<BakedQuad> list = model.getQuads(state, direction, random);
             if (!list.isEmpty()) {
                 mutable.set(pos, direction);
-                if (!cull || shouldAlwaysDraw(direction) || Block.shouldDrawSide(state, world, pos, direction, mutable) || world.getBlockState(pos).isSolidBlock(world, pos.offset(direction))) {
+                if (!cull || shouldAlwaysDraw(direction) || Block.shouldDrawSide(state, world, pos, direction, mutable)) {
                     int i = WorldRenderer.getLightmapCoordinates(world, state, mutable);
                     this.renderQuadsFlat(world, state, !shouldAlwaysDraw(direction) ? pos : pos.add(0, 500, 0), i, overlay, false, matrices, vertexConsumer, list, bitSet);
                 }
