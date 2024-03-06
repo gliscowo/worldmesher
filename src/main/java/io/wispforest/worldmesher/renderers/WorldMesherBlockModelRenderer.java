@@ -35,6 +35,7 @@ public class WorldMesherBlockModelRenderer extends BlockModelRenderer {
 
     public void setCullDirection(Direction direction, boolean alwaysDraw) {
         if (!alwaysDraw) return;
+        System.out.println("check4");
         cullingOverrides |= (byte) (1 << direction.getId());
     }
 
@@ -43,7 +44,7 @@ public class WorldMesherBlockModelRenderer extends BlockModelRenderer {
     }
 
     private boolean shouldAlwaysDraw(Direction direction) {
-        System.out.println((cullingOverrides & (1 << direction.getId())) != 0);
+        System.out.println("check3");
         return (cullingOverrides & (1 << direction.getId())) != 0;
     }
 
@@ -57,7 +58,9 @@ public class WorldMesherBlockModelRenderer extends BlockModelRenderer {
         for (Direction direction : DIRECTIONS) {
             random.setSeed(seed);
             List<BakedQuad> list = model.getQuads(state, direction, random);
+            System.out.println("check1");
             if (!list.isEmpty()) {
+                System.out.println("check2");
                 mutable.set(pos, direction);
                 if (!cull || shouldAlwaysDraw(direction) || Block.shouldDrawSide(state, world, pos, direction, mutable)) {
                     this.renderQuadsSmooth(world, state, !shouldAlwaysDraw(direction) ? pos : pos.add(0, 500, 0), matrices, vertexConsumer, list, fs, bitSet, ambientOcclusionCalculator, overlay);
