@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import it.unimi.dsi.fastutil.objects.Object2ByteLinkedOpenHashMap;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.WorldRenderer;
@@ -65,7 +66,7 @@ public class WorldMesherBlockModelRenderer extends BlockModelRenderer {
             List<BakedQuad> list = model.getQuads(state, direction, random);
             if (!list.isEmpty()) {
                 mutable.set(pos, direction);
-                if (!cull || shouldAlwaysDraw(direction) || shouldDrawSide(state, world, pos, direction, mutable)) {
+                if (!cull || shouldAlwaysDraw(direction) || Block.shouldDrawSide(state, world, pos, direction, mutable) || state.isSolidBlock(world, pos.offset(direction))) {
                     this.renderQuadsSmooth(world, state, !shouldAlwaysDraw(direction) ? pos : pos.add(0, 500, 0), matrices, vertexConsumer, list, fs, bitSet, ambientOcclusionCalculator, overlay);
                 }
             }
@@ -77,36 +78,6 @@ public class WorldMesherBlockModelRenderer extends BlockModelRenderer {
             this.renderQuadsSmooth(world, state, pos, matrices, vertexConsumer, quads, fs, bitSet, ambientOcclusionCalculator, overlay);
         }
 
-    }
-
-    private static boolean shouldDrawSide(BlockState state, BlockView world, BlockPos pos, Direction side, BlockPos otherPos) {
-        BlockState blockState = world.getBlockState(otherPos);
-        if (state.isSideInvisible(blockState, side)) {
-            return false;
-        } else if (blockState.isOpaque()) {
-            Block.NeighborGroup neighborGroup = new Block.NeighborGroup(state, blockState, side);
-            Object2ByteLinkedOpenHashMap<Block.NeighborGroup> object2ByteLinkedOpenHashMap = (Object2ByteLinkedOpenHashMap)FACE_CULL_MAP.get();
-            byte b = object2ByteLinkedOpenHashMap.getAndMoveToFirst(neighborGroup);
-            if (b != 127) {
-                return b != 0;
-            } else {
-                VoxelShape voxelShape = state.getCullingFace(world, pos, side);
-                if (voxelShape.isEmpty()) {
-                    return true;
-                } else {
-                    VoxelShape voxelShape2 = blockState.getCullingFace(world, otherPos, side.getOpposite());
-                    boolean bl = VoxelShapes.matchesAnywhere(voxelShape, voxelShape2, BooleanBiFunction.ONLY_FIRST);
-                    if (object2ByteLinkedOpenHashMap.size() == 2048) {
-                        object2ByteLinkedOpenHashMap.removeLastByte();
-                    }
-
-                    object2ByteLinkedOpenHashMap.putAndMoveToFirst(neighborGroup, (byte)(bl ? 1 : 0));
-                    return bl;
-                }
-            }
-        } else {
-            return true;
-        }
     }
 
     public void renderFlat(BlockRenderView world, BakedModel model, BlockState state, BlockPos pos, MatrixStack matrices, VertexConsumer vertexConsumer, boolean cull, Random random, long seed, int overlay) {
