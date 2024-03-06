@@ -284,7 +284,6 @@ public class WorldMesh {
             renderContext = RendererAccess.INSTANCE.getRenderer() instanceof IndigoRenderer
                     ? new WorldMesherRenderContext(this.world, layer -> this.getOrCreateBuilder(builderStorage, layer))
                     : null;
-            System.out.println(renderContext);
         } catch (Throwable throwable) {
             var fabricApiVersion = FabricLoader.getInstance().getModContainer("worldmesher").get().getMetadata().getCustomValue("worldmesher:fabric_api_build_version").getAsString();
             LOGGER.error(
