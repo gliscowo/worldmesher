@@ -1,41 +1,42 @@
 package io.wispforest.worldmesher;
 
 import com.google.common.collect.HashMultimap;
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.systems.VertexSorter;
+import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.systems.*;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import io.wispforest.worldmesher.render.FluidVertexConsumer;
 import io.wispforest.worldmesher.render.MeshRenderView;
 import net.fabricmc.fabric.api.renderer.v1.Renderer;
 import net.fabricmc.fabric.impl.client.indigo.renderer.IndigoRenderer;
 import net.fabricmc.fabric.impl.client.indigo.renderer.render.WorldMesherRenderContext;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.block.BlockRenderType;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.GlUsage;
-import net.minecraft.client.gl.VertexBuffer;
+import net.minecraft.client.gl.DynamicUniforms;
 import net.minecraft.client.render.*;
 import net.minecraft.client.render.chunk.BlockBufferAllocatorStorage;
+import net.minecraft.client.render.chunk.Buffers;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.SpawnReason;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.math.random.Random;
 import net.minecraft.world.BlockRenderView;
 import net.minecraft.world.World;
 import org.apache.commons.lang3.function.TriFunction;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
+import org.joml.Matrix4fc;
+import org.joml.Vector3f;
+import org.joml.Vector4f;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.nio.ByteBuffer;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Function;
@@ -51,6 +52,7 @@ public class WorldMesh {
 
     private final boolean cull;
 
+	// TODO: figure out a viable replacement for this
     private final Runnable renderStartAction;
     private final Runnable renderEndAction;
 
@@ -66,7 +68,7 @@ public class WorldMesh {
     private @Nullable CompletableFuture<Void> buildFuture = null;
 
     // Vertex storage
-    private final Map<RenderLayer, VertexBuffer> bufferStorage = new HashMap<>();
+    private final Map<BlockRenderLayer, Buffers> bufferStorage = new HashMap<>();
 
     private WorldMesh(BlockRenderView world, BlockPos from, BlockPos to, boolean cull, boolean useGlobalNeighbors, boolean freezeEntities, Runnable renderStartAction, Runnable renderEndAction, TriFunction<PlayerEntity, BlockPos, BlockPos, List<Entity>> entitySupplier) {
         this.from = from;
@@ -97,31 +99,50 @@ public class WorldMesh {
             throw new IllegalStateException("World mesh not prepared!");
         }
 
-        var matrix = matrices.peek().getPositionMatrix();
-        var translucent = RenderLayer.getTranslucent();
+		var state = renderBlockLayers(bufferStorage, matrices.peek().getPositionMatrix());
 
-        this.bufferStorage.forEach((renderLayer, vertexBuffer) -> {
-            if (renderLayer == translucent) return;
-            this.drawBuffer(vertexBuffer, renderLayer, matrix);
-        });
-
-        if (this.bufferStorage.containsKey(translucent)) {
-            this.drawBuffer(bufferStorage.get(translucent), translucent, matrix);
-        }
-
-        VertexBuffer.unbind();
+	    MinecraftClient.getInstance().gameRenderer.getDiffuseLighting().setShaderLights(DiffuseLighting.Type.LEVEL);
+		state.renderSection(BlockRenderLayerGroup.OPAQUE);
+	    state.renderSection(BlockRenderLayerGroup.TRANSLUCENT);
+	    state.renderSection(BlockRenderLayerGroup.TRIPWIRE);
     }
 
-    private void drawBuffer(VertexBuffer vertexBuffer, RenderLayer renderLayer, Matrix4f matrix) {
-        renderLayer.startDrawing();
-        renderStartAction.run();
+	private SectionRenderState renderBlockLayers(Map<BlockRenderLayer, Buffers> bufferStorage, Matrix4fc posMatrix) {
+		EnumMap<BlockRenderLayer, List<RenderPass.RenderObject<GpuBufferSlice[]>>> enumMap = new EnumMap<>(BlockRenderLayer.class);
+		int maxIndicesRequired = 0;
 
-        vertexBuffer.bind();
-        vertexBuffer.draw(matrix, RenderSystem.getProjectionMatrix(), RenderSystem.getShader());
+		for (BlockRenderLayer layer : BlockRenderLayer.values()) {
+			enumMap.put(layer, new ArrayList<>());
+		}
 
-        renderEndAction.run();
-        renderLayer.endDrawing();
-    }
+		List<DynamicUniforms.UniformValue> list = new ArrayList<>();
+		Vector4f colorModulator = new Vector4f(1.0F, 1.0F, 1.0F, 1.0F);
+		Matrix4f textureMatrix = new Matrix4f();
+
+		for (BlockRenderLayer layer : BlockRenderLayer.values()) {
+			var buffers = bufferStorage.get(layer);
+			if (buffers != null) {
+				GpuBuffer indexBuffer = null;
+				VertexFormat.IndexType indexType = null;
+				if (buffers.getIndexBuffer() == null) {
+					if (buffers.getIndexCount() > maxIndicesRequired) maxIndicesRequired = buffers.getIndexCount();
+				} else {
+					indexBuffer = buffers.getIndexBuffer();
+					indexType = buffers.getIndexType();
+				}
+
+				int transformIdx = list.size();
+				list.add(new DynamicUniforms.UniformValue(posMatrix, colorModulator, new Vector3f(0, 0, 0 /* TODO perhaps change this? */), textureMatrix, 1.0F));
+
+				enumMap.put(layer, List.of(new RenderPass.RenderObject<>(0, buffers.getVertexBuffer(), indexBuffer, indexType, 0, buffers.getIndexCount(),
+						(transforms, uniformUploader) -> uniformUploader.upload("DynamicTransforms", transforms[transformIdx]))));
+			} else enumMap.put(layer, List.of());
+		}
+
+		GpuBufferSlice[] gpuBufferSlices = RenderSystem.getDynamicUniforms()
+				.writeAll(list.toArray(new DynamicUniforms.UniformValue[0]));
+		return new SectionRenderState(enumMap, maxIndicesRequired, gpuBufferSlices);
+	}
 
     /**
      * Checks whether this mesh is ready for rendering
@@ -215,7 +236,7 @@ public class WorldMesh {
      * all vertex buffers in the process
      */
     public void reset() {
-        this.bufferStorage.forEach((renderLayer, vertexBuffer) -> vertexBuffer.close());
+        this.bufferStorage.forEach((renderLayer, buffers) -> buffers.close());
         this.bufferStorage.clear();
 
         this.state = MeshState.NEW;
@@ -234,7 +255,7 @@ public class WorldMesh {
      * the main worker executor
      */
     public synchronized void scheduleRebuild() {
-        this.scheduleRebuild(Util.getMainWorkerExecutor());
+        this.scheduleRebuild(MinecraftClient.getInstance());
     }
 
     /**
@@ -267,14 +288,14 @@ public class WorldMesh {
     }
 
     private void build() {
+		RenderSystem.assertOnRenderThread(); // Everything in here must be run in the render thread, so enforce that.
         var allocatorStorage = new BlockBufferAllocatorStorage();
 
         var client = MinecraftClient.getInstance();
         var blockRenderManager = client.getBlockRenderManager();
 
         var matrices = new MatrixStack();
-        var builderStorage = new HashMap<RenderLayer, BufferBuilder>();
-        var random = Random.createLocal();
+        var builderStorage = new HashMap<BlockRenderLayer, BufferBuilder>();
 
         WorldMesherRenderContext renderContext = null;
         try {
@@ -292,26 +313,23 @@ public class WorldMesh {
         }
 
         this.entitiesFrozen = this.freezeEntities;
-        var entitiesFuture = new CompletableFuture<List<DynamicRenderInfo.EntityEntry>>();
-        client.execute(() -> {
-            entitiesFuture.complete(this.entitySupplier.apply(client.player, this.from, this.to.add(1, 1, 1))
-                    .stream()
-                    .map(entity -> {
-                        if (this.freezeEntities) {
-                            var originalEntity = entity;
-                            entity = entity.getType().create(client.world, SpawnReason.LOAD);
+        var entitiesList = this.entitySupplier.apply(client.player, this.from, this.to.add(1, 1, 1))
+                .stream()
+                .map(entity -> {
+                    if (this.freezeEntities) {
+                        var originalEntity = entity;
+                        entity = entity.getType().create(client.world, SpawnReason.LOAD);
 
-                            entity.copyFrom(originalEntity);
-                            entity.copyPositionAndRotation(originalEntity);
-                            entity.tick();
-                        }
+                        entity.copyFrom(originalEntity);
+                        entity.copyPositionAndRotation(originalEntity);
+                        entity.tick();
+                    }
 
-                        return new DynamicRenderInfo.EntityEntry(
-                                entity,
-                                client.getEntityRenderDispatcher().getLight(entity, 0)
-                        );
-                    }).toList());
-        });
+                    return new DynamicRenderInfo.EntityEntry(
+                            entity,
+                            client.getEntityRenderDispatcher().getLight(entity, 0)
+                    );
+                }).toList();
 
         var blockEntities = new HashMap<BlockPos, BlockEntity>();
 
@@ -348,51 +366,55 @@ public class WorldMesh {
             matrices.push();
             matrices.translate(renderPos.getX(), renderPos.getY(), renderPos.getZ());
 
-            var blockLayer = RenderLayers.getBlockLayer(state);
-
             final var model = blockRenderManager.getModel(state);
-            if (renderContext != null && !model.isVanillaAdapter()) {
-                renderContext.tessellateBlock(this.world, state, pos, model, matrices);
-            } else if (state.getRenderType() == BlockRenderType.MODEL) {
-                blockRenderManager.getModelRenderer().render(this.world, model, state, pos, matrices, this.getOrCreateBuilder(allocatorStorage, builderStorage, blockLayer), cull, random, state.getRenderingSeed(pos), OverlayTexture.DEFAULT_UV);
+            if (renderContext != null) {
+                renderContext.tessellateBlock(state, pos, model, matrices);
+            } else {
+	            blockRenderManager.getModelRenderer().render(this.world, model, state, pos, matrices, blockLayer -> this.getOrCreateBuilder(allocatorStorage, builderStorage, blockLayer), cull, state.getRenderingSeed(pos), OverlayTexture.DEFAULT_UV);
             }
 
             matrices.pop();
         }
 
-        var future = new CompletableFuture<Void>();
-        RenderSystem.recordRenderCall(() -> {
-            this.bufferStorage.forEach((renderLayer, vertexBuffer) -> vertexBuffer.close());
-            this.bufferStorage.clear();
+        this.bufferStorage.forEach((renderLayer, buffers) -> buffers.close());
+        this.bufferStorage.clear();
 
-            builderStorage.forEach((renderLayer, bufferBuilder) -> {
-                var newBuffer = new VertexBuffer(GlUsage.STATIC_WRITE);
+        builderStorage.forEach((renderLayer, bufferBuilder) -> {
+            var built = bufferBuilder.endNullable();
+            if (built == null) return;
 
-                var built = bufferBuilder.endNullable();
-                if (built == null) return;
+            if (renderLayer.isTranslucent()) {
+                var camera = client.gameRenderer.getCamera();
+                built.sortQuads(allocatorStorage.get(renderLayer), VertexSorter.byDistance((float) camera.getPos().x - (float) from.getX(), (float) camera.getPos().y - (float) from.getY(), (float) camera.getPos().z - (float) from.getZ()));
+            }
 
-                if (renderLayer == RenderLayer.getTranslucent()) {
-                    var camera = client.gameRenderer.getCamera();
-                    built.sortQuads(allocatorStorage.get(renderLayer), VertexSorter.byDistance((float) camera.getPos().x - (float) from.getX(), (float) camera.getPos().y - (float) from.getY(), (float) camera.getPos().z - (float) from.getZ()));
-                }
+	        GpuBuffer vertexBuffer = RenderSystem.getDevice()
+		            .createBuffer(
+				            () -> "WorldMesher vertex buffer",
+				            GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_COPY_DST,
+				            built.getBuffer()
+		            );
 
-                newBuffer.bind();
-                newBuffer.upload(built);
+	        ByteBuffer indices = built.getSortedBuffer();
+	        GpuBuffer indexBuffer = indices != null
+		            ? RenderSystem.getDevice()
+		            .createBuffer(
+				            () -> "WorldMesher index buffer",
+				            GpuBuffer.USAGE_INDEX | GpuBuffer.USAGE_COPY_DST,
+				            indices
+		            )
+		            : null;
 
-                var discardedBuffer = this.bufferStorage.put(renderLayer, newBuffer);
-                if (discardedBuffer != null) {
-                    discardedBuffer.close();
-                }
-            });
-
-            future.complete(null);
+            var discardedBuffer = this.bufferStorage.put(renderLayer, new Buffers(vertexBuffer, indexBuffer, built.getDrawParameters().indexCount(), built.getDrawParameters().indexType()));
+            if (discardedBuffer != null) {
+                discardedBuffer.close();
+            }
         });
-        future.join();
 
         var entities = HashMultimap.<Vec3d, DynamicRenderInfo.EntityEntry>create();
-        for (var entityEntry : entitiesFuture.join()) {
+        for (var entityEntry : entitiesList) {
             entities.put(
-                    entityEntry.entity().getPos().subtract(this.from.getX(), this.from.getY(), this.from.getZ()),
+                    entityEntry.entity().getSyncedPos().subtract(this.from.getX(), this.from.getY(), this.from.getZ()),
                     entityEntry
             );
         }
@@ -403,10 +425,9 @@ public class WorldMesh {
         );
     }
 
-    private VertexConsumer getOrCreateBuilder(BlockBufferAllocatorStorage allocatorStorage, Map<RenderLayer, BufferBuilder> builderStorage, RenderLayer layer) {
-        return builderStorage.computeIfAbsent(layer, renderLayer -> {
-            return new BufferBuilder(allocatorStorage.get(layer),  VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR_TEXTURE_LIGHT_NORMAL);
-        });
+    private VertexConsumer getOrCreateBuilder(BlockBufferAllocatorStorage allocatorStorage, Map<BlockRenderLayer, BufferBuilder> builderStorage, BlockRenderLayer layer) {
+        return builderStorage.computeIfAbsent(layer, renderLayer ->
+		        new BufferBuilder(allocatorStorage.get(layer), VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR_TEXTURE_LIGHT_NORMAL));
     }
 
     public static class Builder {
@@ -445,7 +466,7 @@ public class WorldMesh {
         }
 
         public Builder(BlockRenderView world, BlockPos origin, BlockPos end) {
-            this(world, origin, end, (except) -> List.of());
+            this(world, origin, end, (except, min, max) -> List.of());
         }
 
         public Builder disableCulling() {
